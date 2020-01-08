@@ -1,0 +1,2 @@
+1=assets/Objects/Fire/Configs/config.txt;
+2=assets/Objects/FireBoss/Configs/config.txt;

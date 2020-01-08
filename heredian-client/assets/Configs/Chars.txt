@@ -1,0 +1,9 @@
+1=assets/Characters/James/Configs/config.txt;
+2=assets/Characters/Julios/Configs/config.txt;
+3=assets/Characters/Japa/Configs/config.txt;
+4=assets/Characters/Gauss/Configs/config.txt;
+5=assets/Enemies/Zombie/Configs/config.txt;
+6=assets/Enemies/BadZombie/Configs/config.txt;
+7=assets/Enemies/Mumy/Configs/config.txt;
+8=assets/Enemies/Skull/Configs/config.txt;
+9=assets/Enemies/Marlin/Configs/config.txt;

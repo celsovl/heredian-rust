@@ -1,0 +1,9 @@
+id=0;
+scale_w=1.0;
+scale_h=1.0;
+posX=160;
+posY=20;
+direction=0;
+ini_act=0;
+action_number=1;
+act_0=assets/Objects/Fire/Configs/act_attack.txt;

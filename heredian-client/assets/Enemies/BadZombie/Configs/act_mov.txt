@@ -1,0 +1,16 @@
+id=1;
+size_x=32;
+size_y=32;
+image=assets/Enemies/BadZombie/Images/Mov.png;
+sound=assets/Enemies/BadZombie/Songs/Mov.ogg;
+qt_sprites=3;
+stepx=1;
+stepy=1;
+fps=3;
+sound=NULL;
+charge=2;
+lifelessid=-1;
+damage=10;
+lock=0;
+rebatex=0;
+rebatey=0;

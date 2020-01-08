@@ -1,0 +1,15 @@
+id=3;
+size_x=46;
+size_y=68;
+image=assets/Characters/Gauss/Images/Attack.png;
+qt_sprites=4;
+stepx=0;
+stepy=0;
+fps=7;
+sound=assets/Characters/Gauss/Songs/Attack.ogg;
+charge=-1;
+damage=1;
+lock=1;
+lifelessid=1;
+rebatex=0;
+rebatey=0;

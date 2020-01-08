@@ -1,0 +1,16 @@
+id=0;
+name=Gauss;
+scale_w=1.0;
+scale_h=1.0;
+posX=150;
+posY=100;
+direction=0;
+ini_act=0;
+healtfull=1000;
+staminafull=100;
+action_number=5;
+act_0=assets/Characters/Gauss/Configs/act_stop.txt;
+act_1=assets/Characters/Gauss/Configs/act_mov.txt;
+act_2=assets/Characters/Gauss/Configs/act_run.txt;
+act_3=assets/Characters/Gauss/Configs/act_attack.txt;
+act_4=assets/Characters/Gauss/Configs/act_dead.txt;

@@ -1,0 +1,16 @@
+image=assets/Stages/Teste/Images/region1.png;
+
+model=assets/Stages/Teste/Model/region1.png;
+
+sound=assets/Stages/Teste/Songs/musicback.ogg;
+
+ex=100;
+ey=100;
+num_gates=1;
+gate1_x1=797;
+gate1_y1=55;
+gate1_x2=800;
+gate1_y2=105;
+gate1_map=2;
+gate1_ex=5;
+gate1_ey=53;

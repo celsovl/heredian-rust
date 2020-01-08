@@ -1,0 +1,14 @@
+image=assets/Stages/Fase5/Images/Fase5.png;
+model=assets/Stages/Fase5/Model/Mold5.png;
+sound=assets/Stages/Fase5/Songs/musicback.ogg;
+ex=100;
+ey=100;
+
+num_gates=1;
+gate1_x1=470;
+gate1_y1=595;
+gate1_x2=570;
+gate1_y2=600;
+gate1_map=4;
+gate1_ex=440;
+gate1_ey=60;

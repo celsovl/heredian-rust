@@ -1,0 +1,16 @@
+image=assets/Stages/Fase1/Images/Fase1.png;
+
+model=assets/Stages/Fase1/Model/Mold1.png;
+
+sound=assets/Stages/Fase1/Songs/musicback.ogg;
+
+ex=20;
+ey=20;
+num_gates=1;
+gate1_x1=797;
+gate1_y1=55;
+gate1_x2=800;
+gate1_y2=105;
+gate1_map=2;
+gate1_ex=5;
+gate1_ey=53;

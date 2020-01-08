@@ -1,0 +1,15 @@
+id=1;
+size_x=46;
+size_y=68;
+image=assets/Characters/Gauss/Images/Mov.png;
+qt_sprites=3;
+stepx=1;
+stepy=1;
+fps=3;
+sound=NULL;
+charge=2;
+lifelessid=-1;
+damage=0;
+lock=0;
+rebatex=10;
+rebatey=15;

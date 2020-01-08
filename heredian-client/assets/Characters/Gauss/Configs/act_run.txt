@@ -1,0 +1,15 @@
+id=2;
+size_x=46;
+size_y=68;
+image=assets/Characters/Gauss/Images/MovFast.png;
+qt_sprites=3;
+stepx=3;
+stepy=3;
+fps=6;
+sound=assets/Songs/Menu/musicsel.ogg;
+charge=-5;
+lifelessid=-1;
+damage=0;
+lock=0;
+rebatex=10;
+rebatey=15;

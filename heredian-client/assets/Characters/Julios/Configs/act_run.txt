@@ -1,0 +1,15 @@
+id=2;
+size_x=33;
+size_y=33;
+image=assets/Characters/Julios/Images/MovFast.png;
+qt_sprites=4;
+stepx=3;
+stepy=3;
+fps=5;
+sound=assets/Songs/Menu/musicsel.ogg;
+charge=-5;
+lifelessid=-1;
+damage=0;
+lock=0;
+rebatex=0;
+rebatey=0;

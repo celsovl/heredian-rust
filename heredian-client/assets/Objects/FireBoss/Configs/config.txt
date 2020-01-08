@@ -1,0 +1,9 @@
+id=0;
+scale_w=4.0;
+scale_h=4.0;
+posX=160;
+posY=20;
+direction=0;
+ini_act=0;
+action_number=1;
+act_0=assets/Objects/FireBoss/Configs/act_attack.txt;

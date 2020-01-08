@@ -1,0 +1,15 @@
+id=4;
+size_x=24;
+size_y=32;
+image=assets/Characters/Julios/Images/Dead.png;
+qt_sprites=-1;
+stepx=0;
+stepy=0;
+fps=0;
+sound=NULL;
+charge=0;
+lifelessid=-1;
+damage=0;
+lock=0;
+rebatex=0;
+rebatey=0;

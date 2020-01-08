@@ -1,0 +1,16 @@
+id=5;
+name=Zombie;
+scale_w=1.0;
+scale_h=1.0;
+posX=150;
+posY=100;
+direction=0;
+ini_act=0;
+healtfull=10;
+staminafull=100;
+action_number=2;
+act_0=assets/Enemies/Zombie/Configs/act_stop.txt;
+act_1=assets/Enemies/Zombie/Configs/act_mov.txt;
+act_2=;
+act_3=assets/Enemies/Zombie/Configs/act_attack.txt;
+lifelessid=-1;

@@ -1,0 +1,15 @@
+id=3;
+size_x=70;
+size_y=70;
+image=assets/Characters/Japa/Images/Attack.png;
+qt_sprites=5;
+stepx=0;
+stepy=0;
+fps=10;
+sound=assets/Characters/Japa/Songs/Attack.ogg;
+charge=-1;
+damage=1;
+lock=1;
+lifelessid=-1;
+rebatex=0;
+rebatey=0;

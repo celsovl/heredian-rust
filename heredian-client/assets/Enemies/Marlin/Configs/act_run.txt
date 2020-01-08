@@ -1,0 +1,15 @@
+id=1;
+size_x=32;
+size_y=32;
+image=assets/Enemies/Marlin/Images/Mov.png;
+qt_sprites=3;
+stepx=1;
+stepy=1;
+sound=NULL;
+fps=3;
+charge=2;
+lifelessid=-1;
+damage=10;
+lock=0;
+rebatex=0;
+rebatey=0;

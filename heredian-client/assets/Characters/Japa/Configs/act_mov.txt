@@ -1,0 +1,15 @@
+id=1;
+size_x=70;
+size_y=70;
+image=assets/Characters/Japa/Images/Mov.png;
+qt_sprites=4;
+stepx=1;
+stepy=1;
+fps=4;
+sound=NULL;
+charge=2;
+lifelessid=-1;
+damage=0;
+lock=0;
+rebatex=20;
+rebatey=18;

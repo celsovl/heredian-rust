@@ -1,0 +1,15 @@
+id=2;
+size_x=46;
+size_y=39;
+image=assets/Characters/James/Images/MovFast.png;
+qt_sprites=4;
+stepx=5;
+stepy=5;
+fps=6;
+sound=assets/Songs/Menu/musicsel.ogg;
+charge=-5;
+lifelessid=-1;
+damage=0;
+lock=0;
+rebatex=8;
+rebatey=4;

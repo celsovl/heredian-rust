@@ -1,0 +1,6 @@
+map1=assets/Stages/Fase1/config.txt;
+map2=assets/Stages/Fase2/config.txt;
+map3=assets/Stages/Fase3/config.txt;
+map4=assets/Stages/Fase4/config.txt;
+map5=assets/Stages/Fase5/config.txt;
+

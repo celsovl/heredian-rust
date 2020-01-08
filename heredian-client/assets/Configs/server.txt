@@ -1,0 +1,2 @@
+server=localhost;
+boss_char_id=21;

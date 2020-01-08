@@ -1,0 +1,15 @@
+id=3;
+size_x=38;
+size_y=31;
+image=assets/Characters/Julios/Images/Attack.png;
+qt_sprites=6;
+stepx=0;
+stepy=0;
+fps=10;
+sound=assets/Characters/Julios/Songs/Attack.ogg;
+charge=-1;
+damage=1;
+lock=1;
+lifelessid=-1;
+rebatex=0;
+rebatey=0;

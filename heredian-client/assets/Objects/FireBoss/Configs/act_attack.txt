@@ -1,0 +1,11 @@
+id=0;
+size_x=20;
+size_y=20;
+image=assets/Objects/FireBoss/Images/Attack.png;
+qt_sprites=1;
+stepx=2;
+stepy=2;
+fps=10;
+sound=NULL;
+damage=300;
+lock=0;

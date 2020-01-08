@@ -1,0 +1,17 @@
+id=3;
+size_x=32;
+size_y=32;
+image=assets/Enemies/Marlin/Images/Attack.png;
+sound=assets/Enemies/Marlin/Songs/Attack.ogg;
+qt_sprites=6;
+stepx=0;
+stepy=0;
+fps=6;
+charge=-1;
+damage=10;
+lock=1;
+lifelessid=2;
+damage=0;
+lock=0;
+rebatex=0;
+rebatey=0;
