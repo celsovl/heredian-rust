@@ -38,11 +38,12 @@ pub struct GameState {
     pub ambient: Option<Scene>,
     pub total_chars: i32,
     pub total_enemies: i32,
-    pub local_char_id: i32,
     pub total_lifeless: i32,
     pub connect_erro: bool,
     pub scale: f32,
-    pub boss_char_id: i32,
+
+    pub boss_char_id: usize,
+    pub local_char_id: usize,
 
     pub list_chars: Vec<Char>,
     pub list_lifeless: Vec<Char>,
@@ -203,13 +204,13 @@ pub struct Gate {
 
 #[derive(Default, Debug)]
 pub struct Char {
-    obj: Object,
-    act: Vec<Action>,
-    info: InfoChar,
-    idmap: i32,
-    dead: i32,
-    totlifeless: i32,
-    listlifeless: Vec<Lifeless>,
+    pub obj: Object,
+    pub act: Vec<Action>,
+    pub info: InfoChar,
+    pub idmap: i32,
+    pub dead: i32,
+    pub totlifeless: i32,
+    pub listlifeless: Vec<Lifeless>,
 }
 
 #[derive(Debug)]
