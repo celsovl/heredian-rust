@@ -6,7 +6,7 @@ use crate::heredian::structs::*;
 pub struct SelectCharScreen;
 
 impl SelectCharScreen {
-    pub fn show(&self, state: &GameState) -> Option<OpcaoChar> {
+    pub fn show(state: &GameState) -> Option<OpcaoChar> {
         let fonte = al_load_font("assets/Fonts/font_menu.ttf", 100, 0);
         let image = al_load_bitmap("assets/Images/select.png");
 

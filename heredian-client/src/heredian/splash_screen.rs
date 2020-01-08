@@ -5,15 +5,15 @@ pub struct SplashScreen;
 
 impl SplashScreen {
 
-    fn fade_in(&self, alfa: u8, image: *const AlBitmap, state: &GameState) {
-        self.fade(alfa, image, state);
+    fn fade_in(alfa: u8, image: *const AlBitmap, state: &GameState) {
+        Self::fade(alfa, image, state);
     }
 
-    fn fade_out(&self, alfa: u8, image: *const AlBitmap, state: &GameState) {
-        self.fade(255-alfa, image, state);
+    fn fade_out(alfa: u8, image: *const AlBitmap, state: &GameState) {
+        Self::fade(255-alfa, image, state);
     }
 
-    fn fade(&self, alfa: u8, image: *const AlBitmap, state: &GameState) {
+    fn fade(alfa: u8, image: *const AlBitmap, state: &GameState) {
         al_clear_to_color(al_map_rgb(0, 0, 0));
         
 		// imagem de fundo
@@ -33,7 +33,7 @@ impl SplashScreen {
 		al_flip_display();
     }
 
-    pub fn show(&self, state: &GameState) {
+    pub fn show(state: &GameState) {
         let image = al_load_bitmap("assets/Images/logo0.png");
         let timer = al_create_timer(0.005);
 
@@ -59,7 +59,7 @@ impl SplashScreen {
 
                         match phase {
                             Phase::FadeIn => {
-                                self.fade_in(ciclos, image, state);
+                                Self::fade_in(ciclos, image, state);
                                 if ciclos == 255 {
                                     phase = Phase::Middle;
                                     ciclos = 0;
@@ -72,7 +72,7 @@ impl SplashScreen {
                                 }
                             },
                             Phase::FadeOut => {
-                                self.fade_out(ciclos, image, state);
+                                Self::fade_out(ciclos, image, state);
                                 if ciclos == 255 {
                                     break;
                                 }

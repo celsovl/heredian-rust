@@ -8,7 +8,7 @@ pub struct IntroScreen;
 
 impl IntroScreen {
 
-    fn carregar_texto<'a>(&self, config_file: &'a ConfigFile) -> Vec<&'a String> {
+    fn carregar_texto<'a>(config_file: &'a ConfigFile) -> Vec<&'a String> {
         let num_lines = config_file.get("num_lines").expect("num_lines não encontrado.");
         let mut texto = Vec::with_capacity(num_lines);
 
@@ -22,7 +22,7 @@ impl IntroScreen {
         texto
     }
 
-    pub fn show(&self, state: &GameState) {
+    pub fn show(state: &GameState) {
         let config_file = ConfigFile::load("assets/Configs/Intro.txt");
         let fonte = al_load_font("assets/Fonts/font_intro.TTF", 20, 0);
 
@@ -32,7 +32,7 @@ impl IntroScreen {
         let narrative = al_load_sample("assets/Songs/Intro/intro_narrative.ogg");
         al_play_sample(narrative, 2.0, 0.0, 1.0, AlPlaymode::ALLEGRO_PLAYMODE_ONCE, ptr::null_mut());
 
-        let texto = self.carregar_texto(&config_file);
+        let texto = Self::carregar_texto(&config_file);
         let speed: f32 = config_file.get("speed_text").expect("speed_text não encontrado");
 
         let space = 45f32;

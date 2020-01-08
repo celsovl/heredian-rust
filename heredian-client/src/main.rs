@@ -6,6 +6,7 @@ use crate::heredian::splash_screen::*;
 use crate::heredian::intro_screen::*;
 use crate::heredian::menu_screen::*;
 use crate::heredian::select_char_screen::*;
+use crate::heredian::loading_screen::*;
 use crate::heredian::game_screen::*;
 
 pub mod heredian;
@@ -18,23 +19,19 @@ fn main() {
     let mut state = gdp_init();
     state.init();
 
-    let splash = SplashScreen;
-    splash.show(&state);
-
-    let intro = IntroScreen;
-    intro.show(&state);
-
-    let menu = MenuScreen;
-    let opcao = menu.show(&state);
+    SplashScreen::show(&state);
+    IntroScreen::show(&state);
+    let opcao = MenuScreen::show(&state);
 
     state.opmenu = Some(opcao);
 
     if Some(OpcaoMenu::NovoJogo) == state.opmenu {
-        let selchar = SelectCharScreen;
-        let opcao = selchar.show(&state);
+        let opcao = SelectCharScreen::show(&state);
 
-        if let Some(_) = opcao {
+        if opcao.is_some() {
             state.opchar = opcao;
+
+            LoadingScreen::show(&state);
 
             let game = GameScreen {};
             //game.show(&state);

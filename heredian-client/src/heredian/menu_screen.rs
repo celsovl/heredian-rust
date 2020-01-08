@@ -7,7 +7,7 @@ pub struct MenuScreen;
 
 impl MenuScreen {
 
-    pub fn show(&self, state: &GameState) -> OpcaoMenu {
+    pub fn show(state: &GameState) -> OpcaoMenu {
         let fonte = al_load_font("assets/Fonts/font_menu.ttf", 100, 0);
         let image = al_load_bitmap("assets/Images/Menu.png");
         let music = al_load_sample("assets/Songs/Menu/music.ogg");
