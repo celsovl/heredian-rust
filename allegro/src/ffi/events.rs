@@ -206,7 +206,7 @@ extern {
     pub fn al_get_next_event(queue: *const AlEventQueue, ret_event: *mut AlEvent) -> bool;
     pub fn al_peek_next_event(queue: *const AlEventQueue, ret_event: *mut AlEvent) -> bool;
     pub fn al_drop_next_event(queue: *const AlEventQueue) -> bool;
-    pub fn al_flush_event_queue(queue: *const AlEventQueue) -> bool;
+    pub fn al_flush_event_queue(queue: *const AlEventQueue);
     pub fn al_wait_for_event(queue: *const AlEventQueue, ret_event: *mut AlEvent);
     pub fn al_wait_for_event_timed(queue: *const AlEventQueue, ret_event: *mut AlEvent, secs: f32) -> bool;
     pub fn al_wait_for_event_until(queue: *const AlEventQueue, ret_event: *mut AlEvent, timeout: *const AlTimeout) -> bool;

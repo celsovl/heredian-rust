@@ -60,7 +60,7 @@ pub struct GameState {
     pub local_char_id: usize,
 
     pub list_chars: Vec<Char>,
-    pub list_lifeless: Vec<Char>,
+    pub list_lifeless: Vec<Lifeless>,
 
     pub opmenu: Option<OpcaoMenu>,
     pub opchar: Option<OpcaoChar>,
@@ -75,12 +75,15 @@ pub struct GameState {
 }
 
 impl GameState {
+
     pub fn avg_fps(&mut self) -> f64 {
+        const ALPHA: f64 = 0.01;
+
         let cur_time = al_get_time();
         let fps = 1.0 / (cur_time - self.last_time);
 
-        self.fps = if self.fps != 0.0 {
-                        0.001*fps + 0.999*self.fps
+        self.fps = if self.fps > 1.0 {
+                        ALPHA*fps + (1.0-ALPHA)*self.fps
                     } else {
                         fps
                     };
@@ -171,14 +174,14 @@ pub struct Object {
     pub idchar: i32,
     pub x: f32,
     pub y: f32,
-    pub w: f64,
-    pub h: f64,
+    pub w: f32,
+    pub h: f32,
     pub wd: f32,
     pub hd: f32,
     pub d: i32,
     pub d2: i32,
     pub a: i32,
-    pub lock: i32,
+    pub lock: bool,
     pub a2: u32,
     pub r#type: i32,
 }
@@ -187,14 +190,14 @@ pub struct Object {
 pub struct Action {
     pub id: i32,
     pub fps: f64,
-    pub directions: VecDeque<Sprite>,
+    pub directions: [VecDeque<Sprite>; 4],
     pub image: *const AlBitmap,
     pub fila_timer: *const AlEventQueue,
     pub sound: Option<*const AlSample>,
     pub stepx: i32,
     pub stepy: i32,
     pub damage: i32,
-    pub lock: i32,
+    pub lock: bool,
     pub lifelessid: Option<i32>,
     pub charge: Option<i32>,
     pub rebatex: Option<i32>,
@@ -423,15 +426,17 @@ impl Info {
 }
 
 impl Sprite {
-    pub fn from_config(config_file: &ConfigFile) -> VecDeque<Sprite> {
+    pub fn from_config(config_file: &ConfigFile) -> [VecDeque<Sprite>; 4] {
         let qt_sprites = config_file.get("qt_sprites").expect("qt_sprites não encontrado");
 
         let ntamx = config_file.get("size_x").expect("size_x não encontrado");
         let ntamy = config_file.get("size_y").expect("size_y não encontrado");
 
-        let mut sprites = VecDeque::new();
+        let mut all_sprites = [VecDeque::new(), VecDeque::new(), VecDeque::new(), VecDeque::new()];
 
         for i in 0..4 {
+            let sprites = &mut all_sprites[i];
+
             if qt_sprites == -1 {
                 sprites.push_front(Sprite {
                     ix: 0,
@@ -446,7 +451,7 @@ impl Sprite {
             for j in (0..qt_sprites).rev() {
                 let mut sprite = Sprite {
                     ix: j,
-                    iy: i,
+                    iy: i as i32,
                     w: ntamx,
                     h: ntamy,
     
@@ -464,7 +469,7 @@ impl Sprite {
             }
         }
 
-        sprites
+        all_sprites
     }
 }
 
@@ -479,7 +484,7 @@ impl Object {
             y: config_file.get("posY").expect("posY não encontrado."),
             d: config_file.get("direction").expect("direction não encontrado."),
             a: config_file.get("ini_act").expect("ini_act não encontrado."),
-            lock: 0,
+            lock: false,
             a2: 0,
             d2: 0,
             
@@ -558,7 +563,7 @@ impl Action {
 
             charge: action_config_file.get("charge"),
             damage: action_config_file.get("damage").expect("damage não encontrado."),
-            lock: action_config_file.get("lock").expect("lock não encontrado."),
+            lock: action_config_file.get::<i32>("lock").expect("lock não encontrado.") != 0,
 
             directions: directions,
         }
@@ -582,7 +587,12 @@ impl Lifeless {
             actions: acoes,
         }
     }
+
+    pub fn draw(&self) {
+
+    }
 }
+
 impl Char {
     pub fn load(id: i32) -> Char {
         let path = Path::new("assets/Configs/Chars.txt");
@@ -674,12 +684,30 @@ impl Char {
 
         if self.obj.a2 & 2 != 0 {
             self.obj.a = 3;
-        } else if self.obj.d2 != 0 {
+        } else if self.obj.d2 == 0 {
             self.obj.a = 0;
         } else if self.obj.a2 & 1 != 0 {
             self.obj.a = 2;
         } else {
             self.obj.a = 1;
+        }
+
+        let act = &self.act[self.obj.a as usize];
+
+        if self.obj.d2 & GDPUP != 0 {
+            self.obj.y -= act.stepy as f32;
+        }
+
+        if self.obj.d2 & GDPDOWN != 0 {
+            self.obj.y += act.stepy as f32;
+        }
+
+        if self.obj.d2 & GDPLEFT != 0 {
+            self.obj.x -= act.stepx as f32;
+        }
+
+        if self.obj.d2 & GDPRIGHT != 0 {
+            self.obj.x += act.stepx as f32;
         }
 
         old != (self.obj.d, self.obj.d2, self.obj.a, self.obj.a2)
@@ -724,6 +752,111 @@ impl Char {
         }
         
         chan.0.send(char_info).unwrap();
+    }
+
+    pub fn draw(&mut self) {
+        let a = self.obj.a as usize;
+
+        let d = match self.obj.d {
+            GDPLEFT => 1,
+            GDPRIGHT => 2,
+            GDPUP => 3,
+            GDPDOWN => 0,
+            _ => 2
+        };
+
+        if let Some(sound) = self.act[a].sound {
+            al_play_sample_b(sound, 1.0, 0.0, 1.0, AlPlaymode::ALLEGRO_PLAYMODE_ONCE, ptr::null_mut());
+        }
+
+        let sprites = &self.act[a].directions[d];
+        let sprite = sprites.front().unwrap();
+
+        if self.act[a].lock {
+            self.obj.lock = true;
+        }
+
+        // adjust object width 
+        self.obj.wd = self.obj.w * sprite.w as f32;
+        self.obj.hd = self.obj.h * sprite.h as f32;
+
+        //gdp_movsprite(&tchar->obj,&oactions[acao]);
+
+        let frame = al_create_sub_bitmap(
+            self.act[a].image,
+            sprite.w*sprite.ix,
+            sprite.h*sprite.iy,
+            sprite.w,
+            sprite.h);
+
+        // desenha o sprite
+        al_draw_scaled_bitmap(
+            frame,
+            0.0,
+            0.0,
+            sprite.w as f32,
+            sprite.h as f32,
+            self.obj.x,
+            self.obj.y,
+            self.obj.wd,
+            self.obj.hd,
+            0);
+
+        al_destroy_bitmap(frame);
+
+        // verifica se deu tempo para troca de sprite
+        if !al_is_event_queue_empty(self.act[a].fila_timer) {
+            let mut charevento = AlEvent::default();
+            al_wait_for_event(self.act[a].fila_timer, &mut charevento);
+
+            // muda o sprite
+            if charevento.get_type() == AlEventType::ALLEGRO_EVENT_TIMER {
+                // verica se pode libera a movimentacao
+                if self.obj.lock && sprite.last == 1 {
+                    self.obj.lock = false;
+                    self.obj.a = 0;
+                    self.obj.a2 &= !2;
+                }
+
+                // se existir alguma magia, cria o objeto
+                /*
+                if self.act[a].lifelessid.is_some() && sprite.first == 1 && self.listlifeless.len() < MAXCHARLIFELESS {
+                    int id = idlifeless();
+
+                    listlifeless[id] = malloc(sizeof(Lifeless));
+
+                    gdp_load_Lifeless(oactions[acao].lifelessid, listlifeless[id]);
+                    ntotlifeless++;
+
+                    listlifeless[id]->dead       = 0;
+                    listlifeless[id]->obj.idchar = tchar->obj.id;
+                    listlifeless[id]->obj.id     = id;
+                    listlifeless[id]->idmap      = opmap;
+                    listlifeless[id]->obj.d2     = tchar->obj.d;
+                    listlifeless[id]->obj.d      = tchar->obj.d;
+
+                    listlifeless[id]->obj.x = tchar->obj.x;
+                    listlifeless[id]->obj.y = tchar->obj.y;
+
+                    tchar->listlifeless[tchar->totlifeless] = listlifeless[id];
+                    tchar->totlifeless++;
+                }
+                */
+
+                // se for o ultimo sprite e o objeto não estiver travado, gasta stamina
+                if sprite.last == 1 || !self.obj.lock {
+                    // gasta a stamina
+                    self.info.stamina += self.act[a].charge.unwrap_or(0);
+                    self.info.stamina = self.info.stamina.min(self.info.staminafull).max(0);
+                }
+
+                // muda de sprite
+                let sprites = &mut self.act[a].directions[d];
+                sprites.rotate_left(1);
+
+                al_flush_event_queue(self.act[a].fila_timer);
+            }
+        }
     }
 }
 

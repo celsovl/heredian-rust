@@ -1,3 +1,4 @@
+use std::cmp::{Ord, Ordering};
 use std::thread::{self, JoinHandle};
 use std::time;
 use std::sync::mpsc::{channel, Sender};
@@ -137,7 +138,51 @@ impl<T: Connection + Default> GameScreen<T> {
         al_flip_display();
     }
 
-    fn draw_objects(&self, state: &GameState) {
+    fn draw_objects(&self, state: &mut GameState) {
+        enum CharOrLifeless<'a> {
+            Char(&'a mut Char),
+            Lifeless(&'a mut Lifeless)
+        }
+
+        impl<'a> PartialEq for CharOrLifeless<'a> {
+            fn eq(&self, other: &Self) -> bool {
+                self.cmp(other) == Ordering::Equal
+            }
+        }
+
+        impl<'a> PartialOrd for CharOrLifeless<'a> {
+            fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+                Some(self.cmp(other))
+            }
+        }
+
+        impl<'a> Eq for CharOrLifeless<'a> {}
+
+        impl<'a> Ord for CharOrLifeless<'a> {
+            fn cmp(&self, other: &Self) -> Ordering {
+                match (self, other) {
+                    (CharOrLifeless::Char(c1), CharOrLifeless::Char(c2)) => c1.obj.id.cmp(&c2.obj.id),
+                    (CharOrLifeless::Char(_), CharOrLifeless::Lifeless(_)) => Ordering::Less,
+                    (CharOrLifeless::Lifeless(_), CharOrLifeless::Char(_)) => Ordering::Greater,
+                    (CharOrLifeless::Lifeless(l1), CharOrLifeless::Lifeless(l2)) => l1.obj.id.cmp(&l2.obj.id),
+                }
+            }
+        }
+
+        // it creates vec to sort objects in order of their bottom position
+        // objects with a lower bottom position (i.e. up on the display) are drawn first
+        let mut objects = Vec::with_capacity(state.list_chars.len() + state.list_lifeless.len());
+
+        objects.extend(state.list_chars.iter_mut().map(|c: &mut Char| ((c.obj.y + c.obj.h) as i32, CharOrLifeless::Char(c))));
+        objects.extend(state.list_lifeless.iter_mut().map(|l: &mut Lifeless| ((l.obj.y + l.obj.h) as i32, CharOrLifeless::Lifeless(l))));
+        objects.sort();
+
+        for (_, object) in objects {
+            match object {
+                CharOrLifeless::Char(c) => c.draw(),
+                CharOrLifeless::Lifeless(l) => l.draw()
+            }
+        }
     }
 
     fn draw_info(&self, state: &mut GameState) {

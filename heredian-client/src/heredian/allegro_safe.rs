@@ -338,3 +338,16 @@ pub fn al_draw_filled_rectangle(x1: f32, y1: f32, x2: f32, y2: f32, color: AlCol
 pub fn al_get_time() -> f64 {
     unsafe { ffi::time::al_get_time() }
 }
+
+pub fn al_create_sub_bitmap(parent: *const AlBitmap, x: i32, y: i32, w: i32, h: i32) -> *const AlBitmap {
+    let res = unsafe { ffi::graphics::al_create_sub_bitmap(parent, x, y, w, h) };
+    if res.is_null() {
+        panic!("Can't create sub bitmap.");
+    }
+
+    res
+}
+
+pub fn al_flush_event_queue(queue: *const AlEventQueue) {
+    unsafe { ffi::events::al_flush_event_queue(queue) }
+}
