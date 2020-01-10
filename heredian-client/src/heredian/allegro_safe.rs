@@ -330,3 +330,11 @@ pub fn al_build_transform(trans: *mut AlTransform, x: f32, y: f32, sx: f32, sy: 
 pub fn al_use_transform(trans: *const AlTransform) {
     unsafe { ffi::transformations::al_use_transform(trans) };
 }
+
+pub fn al_draw_filled_rectangle(x1: f32, y1: f32, x2: f32, y2: f32, color: AlColor) {
+    unsafe { ffi::primitives::al_draw_filled_rectangle(x1, y1, x2, y2, color) };
+}
+
+pub fn al_get_time() -> f64 {
+    unsafe { ffi::time::al_get_time() }
+}

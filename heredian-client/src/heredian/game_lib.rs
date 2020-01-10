@@ -22,6 +22,9 @@ pub fn gdp_init() -> GameState {
         event_queue: ptr::null(),
         timer: ptr::null(),
 
+        fps: 0.0,
+        last_time: 0.0,
+
         width: 800,
         height: 600,
         title: "Heredian",

@@ -52,6 +52,9 @@ pub struct GameState {
     pub total_lifeless: i32,
     pub connect_erro: bool,
     pub scale: f32,
+    
+    pub fps: f64,
+    pub last_time: f64,
 
     pub boss_char_id: usize,
     pub local_char_id: usize,
@@ -72,6 +75,20 @@ pub struct GameState {
 }
 
 impl GameState {
+    pub fn avg_fps(&mut self) -> f64 {
+        let cur_time = al_get_time();
+        let fps = 1.0 / (cur_time - self.last_time);
+
+        self.fps = if self.fps != 0.0 {
+                        0.001*fps + 0.999*self.fps
+                    } else {
+                        fps
+                    };
+
+        self.last_time = cur_time;
+        self.fps
+    }
+
     pub fn create_display(&mut self) {
         assert!(self.screen.is_null());
 
@@ -749,6 +766,30 @@ impl Scene {
             model: model,
             musicback: sound,
             gates: gates,
+        }
+    }
+
+    pub fn draw(&self) {
+        // imagem de fundo
+        al_draw_scaled_bitmap(self.image,
+            0.0, 0.0,
+            self.w as f32,
+            self.h as f32,
+            0.0,
+            0.0, //ambient->info->h
+            self.wd as f32,
+            self.hd as f32,
+            0
+        );
+
+        //mostra portoes
+        for gate in self.gates.iter() {
+            al_draw_filled_rectangle(
+                gate.x1 as f32,
+                gate.y1 as f32,
+                gate.x2 as f32,
+                gate.y2 as f32,
+                al_map_rgba(255, 98, 100,0));
         }
     }
 }

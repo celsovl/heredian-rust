@@ -121,10 +121,50 @@ impl<T: Connection + Default> GameScreen<T> {
     }
 
     fn draw(&mut self, state: &mut GameState) {
+        // clear screen
+        al_clear_to_color(al_map_rgb(0, 0, 0));
+
         self.scale_camera(state);
+
+        let ambient = state.ambient.as_ref().unwrap();
+        ambient.draw();
+
+        self.draw_objects(state);
+
+        self.reset_camera();
+        self.draw_info(state);
+
+        al_flip_display();
     }
 
-    fn scale_camera(&mut self, state: &mut GameState) {
+    fn draw_objects(&self, state: &GameState) {
+    }
+
+    fn draw_info(&self, state: &mut GameState) {
+        let ambient = state.ambient.as_ref().unwrap();
+        let fonte = ambient.info.fonte;
+
+        //gdp_drawinfo(ambient.info);
+        
+        let fps = state.avg_fps();
+
+        // writes the FPS
+        al_draw_text(
+            fonte,
+            al_map_rgb(255,255,255),
+            630.0,
+            5.0,
+            0,
+            &format!("FPS: {:.3}", fps));
+    }
+
+    fn reset_camera(&self) {
+        let mut camera = AlTransform::default();
+        al_identity_transform(&mut camera);
+        al_use_transform(&camera);
+    }
+
+    fn scale_camera(&self, state: &mut GameState) {
         let mut camera = AlTransform::default();
         al_identity_transform(&mut camera);
 
@@ -136,7 +176,7 @@ impl<T: Connection + Default> GameScreen<T> {
         let mut scaled_x = -((x * scale) - (ambient.wd as f32/2.0) + w/2.0);
         let mut scaled_y = -((y * scale) - (ambient.hd as f32/2.0) + h/2.0);
 
-        scaled_x = scaled_x.max(0.0).max(-((scale-1.0)*(ambient.wd as f32)));
+        scaled_x = scaled_x.min(0.0).max(-((scale-1.0)*(ambient.wd as f32)));
         scaled_y = scaled_y.min(ambient.info.h as f32).max(-((scale-1.0)*(ambient.hd as f32)));
 
         al_build_transform(&mut camera, scaled_x, scaled_y, scale, scale, 0.0);
