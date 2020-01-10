@@ -23,7 +23,7 @@ pub use ffi::keyboard::{
     AlKeyboardState,
     ALLEGRO_KEY_UP, ALLEGRO_KEY_DOWN, ALLEGRO_KEY_LEFT, 
     ALLEGRO_KEY_RIGHT, ALLEGRO_KEY_ENTER, ALLEGRO_KEY_D,
-    ALLEGRO_KEY_F
+    ALLEGRO_KEY_F, ALLEGRO_KEY_1, ALLEGRO_KEY_2
 };
 pub use ffi::transformations::{
     AlTransform

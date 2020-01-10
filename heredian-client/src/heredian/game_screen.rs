@@ -133,6 +133,7 @@ impl<T: Connection + Default> GameScreen<T> {
         self.draw_objects(state);
 
         self.reset_camera();
+
         self.draw_info(state);
 
         al_flip_display();
@@ -252,7 +253,22 @@ impl<T: Connection + Default> GameScreen<T> {
         }
     }
 
+    fn update_scale(&self, state: &mut GameState) {
+        let mut kb_state = AlKeyboardState::default();
+        al_get_keyboard_state(&mut kb_state);
+
+        if al_key_down(&kb_state, ALLEGRO_KEY_2) {
+            state.scale = (state.scale+0.05).min(2.0);
+        }
+
+        if al_key_down(&kb_state, ALLEGRO_KEY_1) {
+            state.scale = (state.scale-0.05).max(1.0);
+        }
+    }
+
     fn update(&mut self, state: &mut GameState) {
+        self.update_scale(state);
+
         match self.chan.as_ref() {
             Some(chan) => {
                 loop {
