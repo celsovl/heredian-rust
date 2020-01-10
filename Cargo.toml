@@ -1,0 +1,7 @@
+[workspace]
+members = [
+    "allegro",
+    "heredian-client",
+    "heredian-lib",
+    "heredian-server"
+]
