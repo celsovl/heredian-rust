@@ -164,8 +164,8 @@ pub struct Sprite {
     pub h: i32,
     pub ix: i32,
     pub iy: i32,
-    pub last: i32,
-    pub first: i32,
+    pub last: bool,
+    pub first: bool,
 }
 
 #[derive(Default, Debug)]
@@ -441,8 +441,8 @@ impl Sprite {
                 sprites.push_front(Sprite {
                     ix: 0,
                     iy: 0,
-                    first: 1,
-                    last: 1,
+                    first: true,
+                    last: true,
                     h: 0,
                     w: 0,
                 });
@@ -455,14 +455,14 @@ impl Sprite {
                     w: ntamx,
                     h: ntamy,
     
-                    last: 0,
-                    first: 0,
+                    last: false,
+                    first: false,
                 };
 
                 if j == qt_sprites-1 {
-                    sprite.last = 1;
+                    sprite.last = true;
                 } else if j == 0 {
-                    sprite.first = 1;
+                    sprite.first = true;
                 }
 
                 sprites.push_front(sprite);
@@ -812,7 +812,7 @@ impl Char {
             // muda o sprite
             if charevento.get_type() == AlEventType::ALLEGRO_EVENT_TIMER {
                 // verica se pode libera a movimentacao
-                if self.obj.lock && sprite.last == 1 {
+                if self.obj.lock && sprite.last {
                     self.obj.lock = false;
                     self.obj.a = 0;
                     self.obj.a2 &= !2;
@@ -844,7 +844,7 @@ impl Char {
                 */
 
                 // se for o ultimo sprite e o objeto não estiver travado, gasta stamina
-                if sprite.last == 1 || !self.obj.lock {
+                if sprite.last || !self.obj.lock {
                     // gasta a stamina
                     self.info.stamina += self.act[a].charge.unwrap_or(0);
                     self.info.stamina = self.info.stamina.min(self.info.staminafull).max(0);
