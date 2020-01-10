@@ -3,3 +3,4 @@
 * Make collision works
 * Draw lifeless
 * ~~Fix camera's zoom up and down~~
+* ~~Fix attack lock not working~~

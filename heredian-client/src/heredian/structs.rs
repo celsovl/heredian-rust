@@ -678,7 +678,7 @@ impl Char {
 
         if al_key_down(&mut state, ALLEGRO_KEY_F) {
             self.obj.a2 |= 2;
-        } else {
+        } else if !self.obj.lock {
             self.obj.a2 &= !2;
         }
 
