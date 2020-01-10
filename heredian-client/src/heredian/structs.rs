@@ -284,7 +284,7 @@ pub struct Char {
 
 #[derive(Debug)]
 pub struct Info {
-    pub image: Option<*const AlBitmap>,
+    pub image: *const AlBitmap,
     pub w: i32,
     pub h: i32,
     pub fonte: *const AlFont,
@@ -293,10 +293,8 @@ pub struct Info {
 
 impl Drop for Info {
     fn drop(&mut self) {
-        if let Some(image) = self.image {
-            if !image.is_null() {
-                al_destroy_bitmap(image);
-            }
+        if !self.image.is_null() {
+            al_destroy_bitmap(self.image);
         }
 
         if !self.fonte.is_null() {
@@ -420,7 +418,7 @@ impl Info {
             h: 100,
             w: width,
             color: al_map_rgb(255,255,255),
-            image: None,
+            image: al_load_bitmap("assets/Images/info.png"),
         }
     }
 }
@@ -713,7 +711,7 @@ impl Char {
         if self.info.stamina <= 0 {
             self.obj.a = 0;
         }
-        
+
         if self.info.healt <= 0 {
             self.obj.a = 4;
             self.info.healt = 0;
@@ -865,6 +863,40 @@ impl Char {
 
                 al_flush_event_queue(self.act[a].fila_timer);
             }
+        }
+    }
+
+    pub fn draw_info(&self, state: &GameState, i: i32) {
+        let space = state.width/4; 
+        let ambient = state.ambient.as_ref().unwrap();
+
+        // draw info box
+        al_draw_scaled_bitmap(
+            ambient.info.image,
+            0.0,
+            0.0,
+            255.0,
+            147.0,
+            (space*i) as f32,
+            0.0,
+            space as f32,
+            100.0,
+            0);
+        
+        let data = [
+            (format!("Nome: {}", self.info.name), 15.0),
+            (format!("Saude: {}/{}", self.info.healt, self.info.healtfull), 35.0),
+            (format!("Cansaço: {}/{}", self.info.stamina, self.info.staminafull), 55.0),
+        ];
+
+        for datum in data.iter() {
+            al_draw_text(
+                ambient.info.fonte, 
+                ambient.info.color, 
+                (20+space*i) as f32, 
+                datum.1, 
+                ALLEGRO_ALIGN_LEFT, 
+                &datum.0);
         }
     }
 }

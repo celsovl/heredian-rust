@@ -190,7 +190,10 @@ impl<T: Connection + Default> GameScreen<T> {
         let ambient = state.ambient.as_ref().unwrap();
         let fonte = ambient.info.fonte;
 
-        //gdp_drawinfo(ambient.info);
+        // draw char info (health, stamina, ...)
+        for (i, c) in state.list_chars.iter().enumerate() {
+            c.draw_info(state, i as i32);
+        }
         
         let fps = state.avg_fps();
 
