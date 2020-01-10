@@ -2,5 +2,7 @@
 * ~~change sprite's first and last attribute type to bool~~
 * make collision works
 * draw lifeless
-* ~~Fix camera's zoom up and down~~
-* ~~Fix attack lock not working~~
+* draw char info
+* ~~fix update char status~~
+* ~~fix camera's zoom up and down~~
+* ~~fix attack lock not working~~

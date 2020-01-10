@@ -710,6 +710,15 @@ impl Char {
             self.obj.x += act.stepx as f32;
         }
 
+        if self.info.stamina <= 0 {
+            self.obj.a = 0;
+        }
+        
+        if self.info.healt <= 0 {
+            self.obj.a = 4;
+            self.info.healt = 0;
+        }
+
         old != (self.obj.d, self.obj.d2, self.obj.a, self.obj.a2)
     }
 
