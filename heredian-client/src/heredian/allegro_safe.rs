@@ -20,7 +20,13 @@ pub use ffi::font::{
 };
 pub use ffi::timer::{AlTimer};
 pub use ffi::keyboard::{
-    ALLEGRO_KEY_UP, ALLEGRO_KEY_DOWN, ALLEGRO_KEY_LEFT, ALLEGRO_KEY_RIGHT, ALLEGRO_KEY_ENTER
+    AlKeyboardState,
+    ALLEGRO_KEY_UP, ALLEGRO_KEY_DOWN, ALLEGRO_KEY_LEFT, 
+    ALLEGRO_KEY_RIGHT, ALLEGRO_KEY_ENTER, ALLEGRO_KEY_D,
+    ALLEGRO_KEY_F
+};
+pub use ffi::transformations::{
+    AlTransform
 };
 
 pub fn al_set_window_title(display: *const AlDisplay, title: &str) {
@@ -303,4 +309,24 @@ pub fn al_draw_text(font: *const AlFont, color: AlColor, x: f32, y: f32, flags: 
 
 pub fn al_draw_scaled_bitmap(bitmap: *const AlBitmap, sx: f32, sy: f32, sw: f32, sh: f32, dx: f32, dy: f32, dw: f32, dh: f32, flags: i32) {
     unsafe { ffi::graphics::al_draw_scaled_bitmap(bitmap, sx, sy, sw, sh, dx, dy, dw, dh, flags) };
+}
+
+pub fn al_identity_transform(trans: *mut AlTransform) {
+    unsafe { ffi::transformations::al_identity_transform(trans) };
+}
+
+pub fn al_get_keyboard_state(ret_state: *mut AlKeyboardState) {
+    unsafe { ffi::keyboard::al_get_keyboard_state(ret_state) };
+}
+
+pub fn al_key_down(state: *const AlKeyboardState, keycode: i32) -> bool {
+    unsafe { ffi::keyboard::al_key_down(state, keycode) }
+}
+
+pub fn al_build_transform(trans: *mut AlTransform, x: f32, y: f32, sx: f32, sy: f32, theta: f32) {
+    unsafe { ffi::transformations::al_build_transform(trans, x, y, sx, sy, theta) };
+}
+
+pub fn al_use_transform(trans: *const AlTransform) {
+    unsafe { ffi::transformations::al_use_transform(trans) };
 }

@@ -1,6 +1,7 @@
 use std::ptr;
 use std::collections::VecDeque;
 use std::path::Path;
+use std::sync::mpsc::{Sender, Receiver};
 
 use crate::heredian::allegro_safe::*;
 
@@ -18,17 +19,27 @@ pub const MAXCHARLIFELESS: usize =  5;
 pub const FPS: f64 = 60.0;
 
 #[derive(PartialEq)]
+#[derive(Copy, Clone)]
 pub enum OpcaoMenu {
     NovoJogo,
     Sair,
     Fechar,
 }
 
+#[repr(u8)]
+#[derive(Copy, Clone)]
 pub enum OpcaoChar {
-    James,
+    James = 1,
     Julios,
     Japa,
     Gauss,
+}
+
+pub type Chan<T> = (Sender<T>, Receiver<T>);
+
+pub trait Connection : Default {
+    fn connect(&mut self) -> Chan<PacketCharInfo>;
+    fn close(&mut self);
 }
 
 pub struct GameState {
@@ -78,7 +89,7 @@ impl GameState {
 
         self.event_queue = al_create_event_queue();
         al_register_event_source(self.event_queue, al_get_keyboard_event_source());
-        al_register_event_source(self.event_queue, al_get_display_event_source(self.screen));    
+        al_register_event_source(self.event_queue, al_get_display_event_source(self.screen));
 
         let nfsp = 1.0 / FPS;
 
@@ -87,52 +98,90 @@ impl GameState {
 
         al_start_timer(self.timer);
     }
+
+    pub fn get_localchar(&self) -> Option<&Char> {
+        let fn_find = |v: &&Char| v.obj.id as usize == self.local_char_id;
+        self.list_chars.iter().find(fn_find)
+    }
+
+    pub fn get_localchar_mut(&mut self) -> Option<&mut Char> {
+        let local_char_id = self.local_char_id;
+        let fn_find = |v: &&mut Char| v.obj.id as usize == local_char_id;
+        self.list_chars.iter_mut().find(fn_find)
+    }
+
+    pub fn update_local_char(&mut self, chan: &Chan<PacketCharInfo>) {
+        let (opchar, opmap) = (self.opchar.unwrap_or(OpcaoChar::James), self.opmap);
+        let local_char = self.get_localchar_mut().expect("Cannot find local char.");
+
+        if local_char.update_local() {
+            local_char.send(opchar, opmap, chan);
+        }
+    }
+
+    pub fn update_char(&mut self, char_info: PacketCharInfo) {
+        let fn_find = |v: &&mut Char| v.obj.id == char_info.idchar as i32;
+        match self.list_chars.iter_mut().find(fn_find) {
+            Some(c) => {
+                if c.dead || char_info.idchar < 4 {
+                    let new_char = Char::load(char_info.idchar as i32);
+                    *c = new_char;
+                }
+
+                c.update(char_info);
+            },
+            None => {
+                let new_char = Char::load(char_info.idchar as i32);
+                self.list_chars.push(new_char);
+            }
+        }
+    }
 }
 
 #[derive(Default, Debug)]
 pub struct Sprite {
-    w: i32,
-    h: i32,
-    ix: i32,
-    iy: i32,
-    last: i32,
-    first: i32,
+    pub w: i32,
+    pub h: i32,
+    pub ix: i32,
+    pub iy: i32,
+    pub last: i32,
+    pub first: i32,
 }
 
 #[derive(Default, Debug)]
 pub struct Object {
-    id: i32,
-    idchar: i32,
-    x: i32,
-    y: i32,
-    w: f64,
-    h: f64,
-    wd: i32,
-    hd: i32,
-    d: i32,
-    d2: u32,
-    a: i32,
-    lock: i32,
-    a2: u32,
-    r#type: i32,
+    pub id: i32,
+    pub idchar: i32,
+    pub x: f32,
+    pub y: f32,
+    pub w: f64,
+    pub h: f64,
+    pub wd: f32,
+    pub hd: f32,
+    pub d: i32,
+    pub d2: i32,
+    pub a: i32,
+    pub lock: i32,
+    pub a2: u32,
+    pub r#type: i32,
 }
 
 #[derive(Debug)]
 pub struct Action {
-    id: i32,
-    fps: f64,
-    directions: VecDeque<Sprite>,
-    image: *const AlBitmap,
-    fila_timer: *const AlEventQueue,
-    sound: Option<*const AlSample>,
-    stepx: i32,
-    stepy: i32,
-    damage: i32,
-    lock: i32,
-    lifelessid: Option<i32>,
-    charge: Option<i32>,
-    rebatex: Option<i32>,
-    rebatey: Option<i32>,
+    pub id: i32,
+    pub fps: f64,
+    pub directions: VecDeque<Sprite>,
+    pub image: *const AlBitmap,
+    pub fila_timer: *const AlEventQueue,
+    pub sound: Option<*const AlSample>,
+    pub stepx: i32,
+    pub stepy: i32,
+    pub damage: i32,
+    pub lock: i32,
+    pub lifelessid: Option<i32>,
+    pub charge: Option<i32>,
+    pub rebatex: Option<i32>,
+    pub rebatey: Option<i32>,
 }
 
 impl Drop for Action {
@@ -176,30 +225,30 @@ impl Default for Action {
 
 #[derive(Default, Debug)]
 pub struct Lifeless {
-    obj: Object,
-    actions: Vec<Action>,
-    idmap: i32,
-    dead: i32,
+    pub obj: Object,
+    pub actions: Vec<Action>,
+    pub idmap: i32,
+    pub dead: bool,
 }
 
 #[derive(Default, Debug)]
 pub struct InfoChar {
-    name: String,
-    healtfull: i32,
-    staminafull: i32,
-    healt: i32,
-    stamina: i32,
+    pub name: String,
+    pub healtfull: i32,
+    pub staminafull: i32,
+    pub healt: i32,
+    pub stamina: i32,
 }
 
 #[derive(Default, Debug)]
 pub struct Gate {
-    x1: i32,
-    y1: i32,
-    x2: i32,
-    y2: i32,
-    ambient_id: i32,
-    ex: i32,
-    ey: i32,
+    pub x1: i32,
+    pub y1: i32,
+    pub x2: i32,
+    pub y2: i32,
+    pub ambient_id: i32,
+    pub ex: i32,
+    pub ey: i32,
 }
 
 #[derive(Default, Debug)]
@@ -208,18 +257,18 @@ pub struct Char {
     pub act: Vec<Action>,
     pub info: InfoChar,
     pub idmap: i32,
-    pub dead: i32,
+    pub dead: bool,
     pub totlifeless: i32,
     pub listlifeless: Vec<Lifeless>,
 }
 
 #[derive(Debug)]
 pub struct Info {
-    image: Option<*const AlBitmap>,
-    w: i32,
-    h: i32,
-    fonte: *const AlFont,
-    color: AlColor,
+    pub image: Option<*const AlBitmap>,
+    pub w: i32,
+    pub h: i32,
+    pub fonte: *const AlFont,
+    pub color: AlColor,
 }
 
 impl Drop for Info {
@@ -238,18 +287,18 @@ impl Drop for Info {
 
 #[derive(Debug)]
 pub struct Scene {
-    id: i32,
-    info: Info,
-    image: *const AlBitmap,
-    model: *const AlBitmap,
-    musicback: *const AlSample,
-    w: i32,
-    h: i32,
-    wd: i32,
-    hd: i32,
-    ex: i32,
-    ey: i32,
-    gates: Vec<Gate>,
+    pub id: i32,
+    pub info: Info,
+    pub image: *const AlBitmap,
+    pub model: *const AlBitmap,
+    pub musicback: *const AlSample,
+    pub w: i32,
+    pub h: i32,
+    pub wd: i32,
+    pub hd: i32,
+    pub ex: i32,
+    pub ey: i32,
+    pub gates: Vec<Gate>,
 }
 
 impl Drop for Scene {
@@ -271,36 +320,36 @@ impl Drop for Scene {
 
 #[derive(Default, Debug)]
 pub struct PacketLifelessInfo {
-    x: i16,
-    y: i16,
-    w: i16,
-    h: i16,
-    d: i16,
-    damage: i16,
+    pub x: i16,
+    pub y: i16,
+    pub w: i16,
+    pub h: i16,
+    pub d: i16,
+    pub damage: i16,
 }
 
 #[derive(Default, Debug)]
 pub struct PacketCharInfo {
-    x: i16,
-    y: i16,
-    w: i16,
-    h: i16,
-    a: i16,
-    d: i16,
-    dhit: i16,
-    numchar: i16,
-    idchar: i16,
-    totchar: i16,
-    totenemies: i16,
-    exit: i16,
-    healt: i16,
-    stamina: i16,
-    damage: i16,
-    idmap: i16,
-    totlifeless: i16,
-	step: i16,
-    vision: i16,
-    listlifeless: [PacketLifelessInfo; MAXCHARLIFELESS],
+    pub x: i16,
+    pub y: i16,
+    pub w: i16,
+    pub h: i16,
+    pub a: i16,
+    pub d: i16,
+    pub dhit: i16,
+    pub numchar: i16,
+    pub idchar: i16,
+    pub totchar: i16,
+    pub totenemies: i16,
+    pub exit: bool,
+    pub healt: i16,
+    pub stamina: i16,
+    pub damage: i16,
+    pub idmap: i16,
+    pub totlifeless: i16,
+	pub step: i16,
+    pub vision: i16,
+    pub listlifeless: [Option<PacketLifelessInfo>; MAXCHARLIFELESS],
 }
 
 #[derive(Debug)]
@@ -318,9 +367,9 @@ impl Default for LayeredObjectType {
 
 #[derive(Default, Debug)]
 pub struct LayeredObject {
-    r#type: LayeredObjectType,
-    arr_idx: i32,
-    y: i32,
+    pub r#type: LayeredObjectType,
+    pub arr_idx: i32,
+    pub y: i32,
 }
 
 impl Gate {
@@ -417,8 +466,8 @@ impl Object {
             a2: 0,
             d2: 0,
             
-            hd: 0,
-            wd: 0,
+            hd: 0f32,
+            wd: 0f32,
             idchar: 0,
         }
     }
@@ -511,7 +560,7 @@ impl Lifeless {
 
         Lifeless {
             idmap: -1,
-            dead: 0,
+            dead: false,
             obj: obj,
             actions: acoes,
         }
@@ -531,13 +580,133 @@ impl Char {
 
         Char {
             idmap: -1,
-            dead: 0,
+            dead: false,
             totlifeless: 0,
             act: acoes,
             obj: obj,
             info: info,
             listlifeless: Vec::with_capacity(10),
         }
+    }
+
+    pub fn update(&mut self, char_info: PacketCharInfo) {
+        match char_info.dhit as i32 {
+            GDPUP => self.obj.y -= 1.0,
+            GDPDOWN => self.obj.y += 1.0,
+            GDPLEFT => self.obj.x -= 1.0,
+            GDPRIGHT => self.obj.x += 1.0,
+            other => panic!("invalid PacketCharInfo.dhit value {}", other)
+        }
+
+        if !char_info.exit {
+            if self.obj.a != 4 {
+                self.dead          = false;
+                self.obj.id        = char_info.idchar as i32;
+                self.obj.idchar    = char_info.idchar as i32;
+                self.obj.a         = char_info.a as i32;
+                self.obj.d         = char_info.d as i32;
+                self.obj.x         = char_info.x as f32;
+                self.obj.y         = char_info.y as f32;
+                self.info.stamina  = char_info.stamina as i32;
+                self.idmap         = char_info.idmap as i32;
+            }
+        } else {
+            self.dead = true;
+        }
+    }
+
+    pub fn update_local(&mut self) -> bool {
+        let mut state = AlKeyboardState::default();
+        al_get_keyboard_state(&mut state);
+
+        let old = (self.obj.d, self.obj.d2, self.obj.a, self.obj.a2);
+
+        self.obj.d2 = 0;
+
+        if al_key_down(&mut state, ALLEGRO_KEY_UP) {
+            self.obj.d2 |= GDPUP;
+            self.obj.d = GDPUP;
+        }
+
+        if al_key_down(&mut state, ALLEGRO_KEY_DOWN) {
+            self.obj.d2 |= GDPDOWN;
+            self.obj.d = GDPDOWN;
+        }
+
+        if al_key_down(&mut state, ALLEGRO_KEY_LEFT) {
+            self.obj.d2 |= GDPLEFT;
+            self.obj.d = GDPLEFT;
+        }
+
+        if al_key_down(&mut state, ALLEGRO_KEY_RIGHT) {
+            self.obj.d2 |= GDPRIGHT;
+            self.obj.d = GDPRIGHT;
+        }
+
+        if al_key_down(&mut state, ALLEGRO_KEY_D) {
+            self.obj.a2 |= 1;
+        } else {
+            self.obj.a2 &= !1;
+        }
+
+        if al_key_down(&mut state, ALLEGRO_KEY_F) {
+            self.obj.a2 |= 2;
+        } else {
+            self.obj.a2 &= !2;
+        }
+
+        if self.obj.a2 & 2 != 0 {
+            self.obj.a = 3;
+        } else if self.obj.d2 != 0 {
+            self.obj.a = 0;
+        } else if self.obj.a2 & 1 != 0 {
+            self.obj.a = 2;
+        } else {
+            self.obj.a = 1;
+        }
+
+        old != (self.obj.d, self.obj.d2, self.obj.a, self.obj.a2)
+    }
+
+    pub fn send(&self, opchar: OpcaoChar, opmap: i32, chan: &Chan<PacketCharInfo>) {
+        let mut char_info = PacketCharInfo {
+            numchar:        opchar as i16,
+            idchar:         self.obj.id as i16,
+            a:              self.obj.a as i16,
+            d:              self.obj.d as i16,
+            x:              (self.obj.x as i32  + self.act[self.obj.a as usize].rebatex.unwrap_or(0)) as i16,
+            w:              (self.obj.wd as i32 - self.act[self.obj.a as usize].rebatex.unwrap_or(0)) as i16,
+            y:              (self.obj.y as i32  + self.act[self.obj.a as usize].rebatey.unwrap_or(0)) as i16,
+            h:              (self.obj.hd as i32 - self.act[self.obj.a as usize].rebatey.unwrap_or(0)) as i16,
+            healt:          self.info.healt as i16,
+            stamina:        self.info.stamina as i16,
+            damage:         self.act[self.obj.a as usize].damage as i16,
+            exit:           false,
+            idmap:          opmap as i16,
+            totlifeless:    self.totlifeless as i16,
+            listlifeless:   Default::default(),
+
+            dhit: 0i16,
+            step: 0i16,
+            totchar: 0i16,
+            totenemies: 0i16,
+            vision: 0i16,
+        };
+
+        for (i, lifeless) in self.listlifeless.iter().enumerate() {
+            if !lifeless.dead {
+                char_info.listlifeless[i] = Some(PacketLifelessInfo {
+                    x: lifeless.obj.x as i16,
+                    y: lifeless.obj.y as i16,
+                    w: lifeless.obj.w as i16,
+                    h: lifeless.obj.h as i16,
+                    d: lifeless.obj.d as i16,
+                    damage: lifeless.actions[lifeless.obj.a as usize].damage as i16,
+                });
+            }
+        }
+        
+        chan.0.send(char_info).unwrap();
     }
 }
 

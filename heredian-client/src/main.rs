@@ -33,8 +33,8 @@ fn main() {
 
             LoadingScreen::show(&state);
 
-            let game = GameScreen {};
-            //game.show(&state);
+            let mut game = GameScreen::<SimulatedConnection>::new();
+            game.show(&mut state);
         }
     }
 
