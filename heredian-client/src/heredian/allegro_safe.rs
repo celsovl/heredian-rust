@@ -351,3 +351,7 @@ pub fn al_create_sub_bitmap(parent: *const AlBitmap, x: i32, y: i32, w: i32, h: 
 pub fn al_flush_event_queue(queue: *const AlEventQueue) {
     unsafe { ffi::events::al_flush_event_queue(queue) }
 }
+
+pub fn al_get_pixel(bitmap: *const AlBitmap, x: i32, y: i32) -> AlColor {
+    unsafe { ffi::graphics::al_get_pixel(bitmap, x, y) }
+}

@@ -7,7 +7,7 @@ use super::display::AlDisplay;
 pub type AlBitmap = c_void;
 
 #[repr(C)]
-#[derive(Default, Debug, Copy, Clone)]
+#[derive(Default, Debug, Copy, Clone, PartialEq)]
 pub struct AlColor {
     r: f32,
     g: f32,

@@ -131,10 +131,21 @@ impl GameState {
     }
 
     pub fn update_local_char(&mut self, chan: &Chan<PacketCharInfo>) {
+        let ambient = self.ambient.as_ref().unwrap();
+
+        let state_data = (
+            self.height,
+            ambient.w,
+            ambient.h,
+            ambient.wd,
+            ambient.hd,
+            ambient.model
+        );
+
         let (opchar, opmap) = (self.opchar.unwrap_or(OpcaoChar::James), self.opmap);
         let local_char = self.get_localchar_mut().expect("Cannot find local char.");
 
-        if local_char.update_local() {
+        if local_char.update_local(state_data) {
             local_char.send(opchar, opmap, chan);
         }
     }
@@ -640,41 +651,41 @@ impl Char {
         }
     }
 
-    pub fn update_local(&mut self) -> bool {
-        let mut state = AlKeyboardState::default();
-        al_get_keyboard_state(&mut state);
+    pub fn update_local(&mut self, state_data: (i32, i32, i32, i32, i32, *const AlBitmap)) -> bool {
+        let mut kb_state = AlKeyboardState::default();
+        al_get_keyboard_state(&mut kb_state);
 
         let old = (self.obj.d, self.obj.d2, self.obj.a, self.obj.a2);
 
         self.obj.d2 = 0;
 
-        if al_key_down(&mut state, ALLEGRO_KEY_UP) {
+        if al_key_down(&mut kb_state, ALLEGRO_KEY_UP) {
             self.obj.d2 |= GDPUP;
             self.obj.d = GDPUP;
         }
 
-        if al_key_down(&mut state, ALLEGRO_KEY_DOWN) {
+        if al_key_down(&mut kb_state, ALLEGRO_KEY_DOWN) {
             self.obj.d2 |= GDPDOWN;
             self.obj.d = GDPDOWN;
         }
 
-        if al_key_down(&mut state, ALLEGRO_KEY_LEFT) {
+        if al_key_down(&mut kb_state, ALLEGRO_KEY_LEFT) {
             self.obj.d2 |= GDPLEFT;
             self.obj.d = GDPLEFT;
         }
 
-        if al_key_down(&mut state, ALLEGRO_KEY_RIGHT) {
+        if al_key_down(&mut kb_state, ALLEGRO_KEY_RIGHT) {
             self.obj.d2 |= GDPRIGHT;
             self.obj.d = GDPRIGHT;
         }
 
-        if al_key_down(&mut state, ALLEGRO_KEY_D) {
+        if al_key_down(&mut kb_state, ALLEGRO_KEY_D) {
             self.obj.a2 |= 1;
         } else {
             self.obj.a2 &= !1;
         }
 
-        if al_key_down(&mut state, ALLEGRO_KEY_F) {
+        if al_key_down(&mut kb_state, ALLEGRO_KEY_F) {
             self.obj.a2 |= 2;
         } else if !self.obj.lock {
             self.obj.a2 &= !2;
@@ -715,6 +726,25 @@ impl Char {
         if self.info.healt <= 0 {
             self.obj.a = 4;
             self.info.healt = 0;
+        }
+
+        // move back if collided
+        if self.collided(state_data) {
+            if self.obj.d2 & GDPUP != 0 {
+                self.obj.y += act.stepy as f32;
+            }
+
+            if self.obj.d2 & GDPDOWN != 0 {
+                self.obj.y -= act.stepy as f32;
+            }
+
+            if self.obj.d2 & GDPLEFT != 0 {
+                self.obj.x += act.stepx as f32;
+            }
+
+            if self.obj.d2 & GDPRIGHT != 0 {
+                self.obj.x -= act.stepx as f32;
+            }
         }
 
         old != (self.obj.d, self.obj.d2, self.obj.a, self.obj.a2)
@@ -898,6 +928,60 @@ impl Char {
                 ALLEGRO_ALIGN_LEFT, 
                 &datum.0);
         }
+    }
+
+    pub fn collided(&self, state_data: (i32, i32, i32, i32, i32, *const AlBitmap)) -> bool {
+        let (
+            height, 
+            amb_w, 
+            amb_h, 
+            amb_wd, 
+            amb_hd, 
+            amb_model) = state_data;
+
+        if self.obj.y < 0.0 {
+            return true;
+        }
+
+        if (self.obj.y + self.obj.hd) > height as f32 {
+            return true;
+        }
+
+        let colorwall = al_map_rgb(0, 0, 0);
+
+        let sx = amb_w as f32 / amb_wd as f32;
+        let sy = amb_h as f32 / amb_hd as f32;
+
+        let we = amb_wd as f32 * sx;
+        let he = amb_hd as f32 * sy;
+
+        let act = &self.act[self.obj.a as usize];
+
+        let xup   = (self.obj.x + self.obj.wd - act.rebatex.unwrap_or(0) as f32) * sx;
+        let yup   = (self.obj.y + act.rebatey.unwrap_or(0) as f32) * sy;
+
+        let xdown = (self.obj.x + act.rebatex.unwrap_or(0) as f32) * sx;
+        let ydown = (self.obj.y + self.obj.hd - act.rebatey.unwrap_or(0) as f32) * sy;
+
+        if xdown >= 0.0 && ydown >= 0.0 && xup <= we && yup <= he {
+            if self.obj.d != GDPRIGHT {
+                let color = al_get_pixel(amb_model, xdown as i32, ydown as i32);
+                if colorwall == color {
+                    return true;
+                }
+            }
+
+            if self.obj.d != GDPLEFT {
+                let color = al_get_pixel(amb_model, xup as i32, ydown as i32);
+                if colorwall == color {
+                    return true;
+                }
+            }
+        } else {
+            return true;
+        }
+
+        return false;
     }
 }
 
