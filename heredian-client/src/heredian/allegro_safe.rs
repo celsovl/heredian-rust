@@ -7,7 +7,8 @@ pub use ffi::display::{
 };
 pub use ffi::graphics::{
     AlBitmap, AlColor, AlLockedRegion,
-    ALLEGRO_LOCK_READONLY, ALLEGRO_MEMORY_BITMAP
+    ALLEGRO_LOCK_READONLY, ALLEGRO_MEMORY_BITMAP,
+    AlPixelFormat,
 };
 pub use ffi::events::{
     AlEvent, AlEventType, AlEventSource, AlEventQueue, AlKeyboardEvent
@@ -354,4 +355,16 @@ pub fn al_flush_event_queue(queue: *const AlEventQueue) {
 
 pub fn al_get_pixel(bitmap: *const AlBitmap, x: i32, y: i32) -> AlColor {
     unsafe { ffi::graphics::al_get_pixel(bitmap, x, y) }
+}
+
+pub fn al_draw_circle(cx: f32, cy: f32, r: f32, color: AlColor, thickness: f32) {
+    unsafe { ffi::primitives::al_draw_circle(cx, cy, r, color, thickness) }
+}
+
+pub fn al_draw_rectangle(x1: f32, y1: f32, x2: f32, y2: f32, color: AlColor, thickness: f32) {
+    unsafe { ffi::primitives::al_draw_rectangle(x1, y1, x2, y2, color, thickness) }
+}
+
+pub fn al_unlock_bitmap(bitmap: *const AlBitmap) {
+    unsafe { ffi::graphics::al_unlock_bitmap(bitmap) }
 }

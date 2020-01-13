@@ -285,6 +285,12 @@ impl<T: Connection + Default> GameScreen<T> {
             },
             None => panic!("No channel available for propagation of local char's changes.")
         }
+
+        self.try_ambient_change(state);
+    }
+
+    pub fn try_ambient_change(&self, state: &mut GameState) {
+        state.try_change_ambient();
     }
 
     pub fn show(&mut self, state: &mut GameState) {

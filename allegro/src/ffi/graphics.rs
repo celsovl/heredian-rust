@@ -9,10 +9,10 @@ pub type AlBitmap = c_void;
 #[repr(C)]
 #[derive(Default, Debug, Copy, Clone, PartialEq)]
 pub struct AlColor {
-    r: f32,
-    g: f32,
-    b: f32,
-    a: f32
+    pub r: f32,
+    pub g: f32,
+    pub b: f32,
+    pub a: f32
 }
 
 #[repr(C)]
@@ -34,7 +34,7 @@ impl Default for AlLockedRegion {
     }
 }
 
-#[repr(u32)]
+#[repr(i32)]
 #[allow(non_camel_case_types)]
 pub enum AlPixelFormat {
     ALLEGRO_PIXEL_FORMAT_ANY                   = 0,

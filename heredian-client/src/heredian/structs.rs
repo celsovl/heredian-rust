@@ -42,6 +42,9 @@ pub trait Connection : Default {
     fn close(&mut self);
 }
 
+#[derive(Default, Debug)]
+pub struct Rect(i32, i32, i32, i32);
+
 pub struct GameState {
     pub title: &'static str,
     pub width: i32,
@@ -167,6 +170,24 @@ impl GameState {
             }
         }
     }
+
+    pub fn try_change_ambient(&mut self) {
+        let ambient = self.ambient.as_ref().unwrap();
+        let local_char = self.get_localchar().unwrap();
+
+        let gate = ambient.crossed_gate(&local_char.obj);
+        
+        if let Some(gate) = gate {
+            let gate_info = (gate.ex, gate.ey, gate.ambient_id);
+            let local_char = self.get_localchar_mut().unwrap();
+
+            local_char.obj.x = gate_info.0 as f32;
+            local_char.obj.y = gate_info.1 as f32;
+
+            let new_ambient = Scene::load(gate_info.2, self.width, self.height);
+            self.ambient = Some(new_ambient);
+        }
+    }
 }
 
 #[derive(Default, Debug)]
@@ -177,6 +198,7 @@ pub struct Sprite {
     pub iy: i32,
     pub last: bool,
     pub first: bool,
+    pub rect: Rect,
 }
 
 #[derive(Default, Debug)]
@@ -420,6 +442,13 @@ impl Gate {
 
         gates
     }
+
+    pub fn crossed(&self, obj: &Object) -> bool {
+        obj.x + obj.wd >= self.x1 as f32 &&
+        obj.x <= self.x2 as f32 &&
+        obj.y + obj.hd >= self.y1 as f32 &&
+        obj.y + obj.hd <= self.y2 as f32
+    }
 }
 
 impl Info {
@@ -454,6 +483,7 @@ impl Sprite {
                     last: true,
                     h: 0,
                     w: 0,
+                    rect: Default::default(),
                 });
             }
 
@@ -466,6 +496,7 @@ impl Sprite {
     
                     last: false,
                     first: false,
+                    rect: Default::default(),
                 };
 
                 if j == qt_sprites-1 {
@@ -555,7 +586,8 @@ impl Action {
         al_register_event_source(fila_timer, al_get_timer_event_source(chartimer));
         al_start_timer(chartimer);
 
-        let directions = Sprite::from_config(&action_config_file);
+        let mut directions = Sprite::from_config(&action_config_file);
+        Self::adjust_rects(pri, &mut directions);
 
         Action {
             id: nacao,
@@ -576,6 +608,45 @@ impl Action {
 
             directions: directions,
         }
+    }
+
+    pub fn adjust_rects(image: *const AlBitmap, directions: &mut [VecDeque<Sprite>]) {
+
+        al_lock_bitmap(
+            image,
+            al_get_bitmap_format(image), 
+            ALLEGRO_LOCK_READONLY);
+
+        for direction in directions {
+            for sprite in direction {
+                let mut rect = Rect(std::i32::MAX, std::i32::MAX, std::i32::MIN, std::i32::MIN);
+
+                let frame = al_create_sub_bitmap(
+                    image,
+                    sprite.w*sprite.ix,
+                    sprite.h*sprite.iy,
+                    sprite.w,
+                    sprite.h);
+
+                for x in 0..sprite.w {
+                    for y in 0..sprite.h {
+                        let color = al_get_pixel(frame, x, y);
+                        let is_transparent = color.a == 0.0;
+                        if !is_transparent {
+                            rect.0 = rect.0.min(x);
+                            rect.1 = rect.1.min(y);
+                            rect.2 = rect.2.max(x);
+                            rect.3 = rect.3.max(y);
+                        }
+                    }
+                }
+
+                al_destroy_bitmap(frame);
+                sprite.rect = rect;
+            }
+        }
+
+        al_unlock_bitmap(image);
     }
 }
 
@@ -813,31 +884,50 @@ impl Char {
             self.obj.lock = true;
         }
 
+        let sprite_size = (sprite.rect.2 - sprite.rect.0, sprite.rect.3 - sprite.rect.1);
+
         // adjust object width 
-        self.obj.wd = self.obj.w * sprite.w as f32;
-        self.obj.hd = self.obj.h * sprite.h as f32;
+        self.obj.wd = self.obj.w * (sprite.rect.2 - sprite.rect.0) as f32;
+        self.obj.hd = self.obj.h * (sprite.rect.3 - sprite.rect.1) as f32;
 
         //gdp_movsprite(&tchar->obj,&oactions[acao]);
 
         let frame = al_create_sub_bitmap(
             self.act[a].image,
-            sprite.w*sprite.ix,
-            sprite.h*sprite.iy,
-            sprite.w,
-            sprite.h);
+            sprite.w*sprite.ix + sprite.rect.0,
+            sprite.h*sprite.iy + sprite.rect.1,
+            sprite_size.0,
+            sprite_size.1);
 
         // desenha o sprite
         al_draw_scaled_bitmap(
             frame,
             0.0,
             0.0,
-            sprite.w as f32,
-            sprite.h as f32,
+            sprite_size.0 as f32,
+            sprite_size.1 as f32,
             self.obj.x,
             self.obj.y,
             self.obj.wd,
             self.obj.hd,
             0);
+
+        // draw green bounding box
+        al_draw_rectangle(
+            self.obj.x, 
+            self.obj.y, 
+            self.obj.x + self.obj.wd, 
+            self.obj.y + self.obj.hd, 
+            al_map_rgb(0,255,0), 
+            1.0);
+
+        let (xdown, ydown, xup) = (
+            self.obj.x,
+            (self.obj.y + self.obj.hd),
+            (self.obj.x + self.obj.wd));
+
+        al_draw_circle(xdown, ydown, 2.0, al_map_rgb(0, 0, 255), 1.0);
+        al_draw_circle(xup, ydown, 2.0, al_map_rgb(0, 0, 255), 1.0);
 
         al_destroy_bitmap(frame);
 
@@ -939,7 +1029,7 @@ impl Char {
             amb_hd, 
             amb_model) = state_data;
 
-        if self.obj.y < 0.0 {
+        if self.obj.y < 0.0 || self.obj.x < 0.0 {
             return true;
         }
 
@@ -955,13 +1045,11 @@ impl Char {
         let we = amb_wd as f32 * sx;
         let he = amb_hd as f32 * sy;
 
-        let act = &self.act[self.obj.a as usize];
+        let xup   = (self.obj.x + self.obj.wd) * sx;
+        let yup   = self.obj.y * sy;
 
-        let xup   = (self.obj.x + self.obj.wd - act.rebatex.unwrap_or(0) as f32) * sx;
-        let yup   = (self.obj.y + act.rebatey.unwrap_or(0) as f32) * sy;
-
-        let xdown = (self.obj.x + act.rebatex.unwrap_or(0) as f32) * sx;
-        let ydown = (self.obj.y + self.obj.hd - act.rebatey.unwrap_or(0) as f32) * sy;
+        let xdown = self.obj.x * sx;
+        let ydown = (self.obj.y + self.obj.hd) * sy;
 
         if xdown >= 0.0 && ydown >= 0.0 && xup <= we && yup <= he {
             if self.obj.d != GDPRIGHT {
@@ -1025,6 +1113,19 @@ impl Scene {
             musicback: sound,
             gates: gates,
         }
+    }
+
+    pub fn crossed_gate(&self, obj: &Object) -> Option<&Gate> {
+        let mut crossed = None;
+
+        for gate in self.gates.iter() {
+            if gate.crossed(obj) {
+                crossed = Some(gate);
+                break;
+            }
+        }
+
+        crossed
     }
 
     pub fn draw(&self) {
