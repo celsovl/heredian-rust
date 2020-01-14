@@ -7,6 +7,8 @@ use crate::heredian::allegro_safe::*;
 
 use super::file_manager::ConfigFile;
 
+pub const VOLUME: f32 = 0.2;
+
 pub const GDPLEFT: i32 = 1;
 pub const GDPRIGHT: i32 = 2;
 pub const GDPUP: i32 = 4;
@@ -311,8 +313,7 @@ pub struct Char {
     pub info: InfoChar,
     pub idmap: i32,
     pub dead: bool,
-    pub totlifeless: i32,
-    pub listlifeless: Vec<Lifeless>,
+    pub list_lifeless: Vec<Lifeless>,
 }
 
 #[derive(Debug)]
@@ -595,7 +596,7 @@ impl Action {
             stepx: action_config_file.get("stepx").expect("stepx não encontrado."),
             stepy: action_config_file.get("stepy").expect("stepy não encontrado."),
             fps: fps,
-            lifelessid: action_config_file.get("lifelessid"),
+            lifelessid: action_config_file.get::<i32>("lifelessid").and_then(|v| if v > 0 { Some(v) } else { None } ),
             rebatex: action_config_file.get("rebatex"),
             rebatey: action_config_file.get("rebatey"),
             fila_timer: fila_timer,
@@ -668,8 +669,168 @@ impl Lifeless {
         }
     }
 
-    pub fn draw(&self) {
+    pub fn draw(&mut self) {
+        let d = match self.obj.d {
+            GDPLEFT => 1,
+            GDPRIGHT => 2,
+            GDPUP => 3,
+            GDPDOWN => 0,
+            _ => 2
+        };
 
+        let act = &mut self.actions[self.obj.a as usize];
+        let sprites = &act.directions[d];
+        let sprite = sprites.front().unwrap();
+
+        // se existir, reproduz o som
+        if let Some(sound) = act.sound {
+            al_play_sample(sound, VOLUME * 1.0, 0.0, 1.0, AlPlaymode::ALLEGRO_PLAYMODE_ONCE, ptr::null_mut());
+        }
+
+        let frame = al_create_sub_bitmap(
+            act.image,
+            sprite.w * sprite.ix,
+            sprite.h * sprite.iy,
+            sprite.w,
+            sprite.h);
+
+        // desenha o sprite
+        al_draw_scaled_bitmap(
+            frame,
+            0.0,
+            0.0,
+            sprite.w as f32,
+            sprite.h as f32,
+            self.obj.x,
+            self.obj.y,
+            self.obj.wd,
+            self.obj.hd,
+            0);
+        
+        al_destroy_bitmap(frame);
+
+        if !al_is_event_queue_empty(act.fila_timer) {
+            let mut event = AlEvent::default();
+            al_wait_for_event(act.fila_timer, &mut event);
+
+            if event.get_type() == AlEventType::ALLEGRO_EVENT_TIMER {
+                let sprites = &mut act.directions[d];
+                sprites.rotate_left(1);
+
+                al_flush_event_queue(act.fila_timer);
+            }
+        }
+  }
+
+    pub fn update(&mut self, state_data: (i32, i32, i32, i32, i32, *const AlBitmap)) {
+        let d = match self.obj.d {
+            GDPLEFT => 1,
+            GDPRIGHT => 2,
+            GDPUP => 3,
+            GDPDOWN => 0,
+            _ => 2
+        };
+
+        let act = &self.actions[self.obj.a as usize];
+        let sprites = &act.directions[d];
+        let sprite = sprites.front().unwrap();
+
+        let (old_x, old_y) = (self.obj.x, self.obj.y);
+
+        self.obj.wd = self.obj.w * sprite.w as f32;
+        self.obj.hd = self.obj.h * sprite.h as f32;
+
+        if self.obj.d == GDPUP {
+            self.obj.y -= act.stepy as f32;
+        }
+
+        if self.obj.d == GDPDOWN {
+            self.obj.y += act.stepy as f32;
+        }
+
+        if self.obj.d == GDPLEFT {
+            self.obj.x -= act.stepx as f32;
+        }
+
+        if self.obj.d == GDPRIGHT {
+            self.obj.x += act.stepx as f32;
+        }
+
+        // move back if collided
+        if self.collided(state_data) {
+            if self.obj.d == GDPUP {
+                self.obj.y += act.stepy as f32;
+            }
+
+            if self.obj.d == GDPDOWN {
+                self.obj.y -= act.stepy as f32;
+            }
+
+            if self.obj.d == GDPLEFT {
+                self.obj.x += act.stepx as f32;
+            }
+
+            if self.obj.d == GDPRIGHT {
+                self.obj.x -= act.stepx as f32;
+            }
+        }
+
+        // collided, because it wasn't able to move - so destroy it
+        if (old_x, old_y) == (self.obj.x, self.obj.y) {
+            self.dead = true;
+        }
+    }
+
+    pub fn collided(&self, state_data: (i32, i32, i32, i32, i32, *const AlBitmap)) -> bool {
+        let (
+            height, 
+            amb_w, 
+            amb_h, 
+            amb_wd, 
+            amb_hd, 
+            amb_model) = state_data;
+
+        if self.obj.y < 0.0 || self.obj.x < 0.0 {
+            return true;
+        }
+
+        if (self.obj.y + self.obj.hd) > height as f32 {
+            return true;
+        }
+
+        let colorwall = al_map_rgb(0, 0, 0);
+
+        let sx = amb_w as f32 / amb_wd as f32;
+        let sy = amb_h as f32 / amb_hd as f32;
+
+        let we = amb_wd as f32 * sx;
+        let he = amb_hd as f32 * sy;
+
+        let xup   = (self.obj.x + self.obj.wd) * sx;
+        let yup   = self.obj.y * sy;
+
+        let xdown = self.obj.x * sx;
+        let ydown = (self.obj.y + self.obj.hd) * sy;
+
+        if xdown >= 0.0 && ydown >= 0.0 && xup <= we && yup <= he {
+            if self.obj.d != GDPRIGHT {
+                let color = al_get_pixel(amb_model, xdown as i32, ydown as i32);
+                if colorwall == color {
+                    return true;
+                }
+            }
+
+            if self.obj.d != GDPLEFT {
+                let color = al_get_pixel(amb_model, xup as i32, ydown as i32);
+                if colorwall == color {
+                    return true;
+                }
+            }
+        } else {
+            return true;
+        }
+
+        return false;
     }
 }
 
@@ -688,11 +849,10 @@ impl Char {
         Char {
             idmap: -1,
             dead: false,
-            totlifeless: 0,
             act: acoes,
             obj: obj,
             info: info,
-            listlifeless: Vec::with_capacity(10),
+            list_lifeless: Vec::with_capacity(10),
         }
     }
 
@@ -774,6 +934,31 @@ impl Char {
 
         let act = &self.act[self.obj.a as usize];
 
+        // create magic if needed
+        let d = match self.obj.d {
+            GDPLEFT => 1,
+            GDPRIGHT => 2,
+            GDPUP => 3,
+            GDPDOWN => 0,
+            _ => 2
+        };
+
+        let sprites = &act.directions[d];
+        let sprite = sprites.front().unwrap();
+
+        if !self.obj.lock && sprite.first && self.list_lifeless.len() < MAXCHARLIFELESS {
+            if let Some(id) = act.lifelessid {
+                let mut lifeless = Lifeless::load(id);
+                lifeless.idmap = self.idmap;
+                lifeless.obj.idchar = self.obj.idchar;
+                lifeless.obj.d = self.obj.d;
+                lifeless.obj.d2 = self.obj.d2;
+                lifeless.obj.x = self.obj.x;
+                lifeless.obj.y = self.obj.y;
+                self.list_lifeless.push(lifeless);
+            }
+        }
+
         if self.obj.d2 & GDPUP != 0 {
             self.obj.y -= act.stepy as f32;
         }
@@ -798,6 +983,14 @@ impl Char {
             self.obj.a = 4;
             self.info.healt = 0;
         }
+
+        // update lifeless if needed
+        for lifeless in self.list_lifeless.iter_mut() {
+            lifeless.update(state_data);
+        }
+
+        // clear lifeless dead
+        self.list_lifeless = self.list_lifeless.drain(..).filter(|l| !l.dead).collect();
 
         // move back if collided
         if self.collided(state_data) {
@@ -836,7 +1029,7 @@ impl Char {
             damage:         self.act[self.obj.a as usize].damage as i16,
             exit:           false,
             idmap:          opmap as i16,
-            totlifeless:    self.totlifeless as i16,
+            totlifeless:    0i16,
             listlifeless:   Default::default(),
 
             dhit: 0i16,
@@ -846,7 +1039,7 @@ impl Char {
             vision: 0i16,
         };
 
-        for (i, lifeless) in self.listlifeless.iter().enumerate() {
+        for (i, lifeless) in self.list_lifeless.iter().enumerate() {
             if !lifeless.dead {
                 char_info.listlifeless[i] = Some(PacketLifelessInfo {
                     x: lifeless.obj.x as i16,
@@ -874,7 +1067,7 @@ impl Char {
         };
 
         if let Some(sound) = self.act[a].sound {
-            al_play_sample_b(sound, 1.0, 0.0, 1.0, AlPlaymode::ALLEGRO_PLAYMODE_ONCE, ptr::null_mut());
+            al_play_sample_b(sound, VOLUME * 1.0, 0.0, 1.0, AlPlaymode::ALLEGRO_PLAYMODE_ONCE, ptr::null_mut());
         }
 
         let sprites = &self.act[a].directions[d];
@@ -931,6 +1124,12 @@ impl Char {
 
         al_destroy_bitmap(frame);
 
+        // draw lifeless if needed
+        for lifeless in self.list_lifeless.iter_mut() {
+            lifeless.draw();
+        }
+
+
         // verifica se deu tempo para troca de sprite
         if !al_is_event_queue_empty(self.act[a].fila_timer) {
             let mut charevento = AlEvent::default();
@@ -944,31 +1143,6 @@ impl Char {
                     self.obj.a = 0;
                     self.obj.a2 &= !2;
                 }
-
-                // se existir alguma magia, cria o objeto
-                /*
-                if self.act[a].lifelessid.is_some() && sprite.first == 1 && self.listlifeless.len() < MAXCHARLIFELESS {
-                    int id = idlifeless();
-
-                    listlifeless[id] = malloc(sizeof(Lifeless));
-
-                    gdp_load_Lifeless(oactions[acao].lifelessid, listlifeless[id]);
-                    ntotlifeless++;
-
-                    listlifeless[id]->dead       = 0;
-                    listlifeless[id]->obj.idchar = tchar->obj.id;
-                    listlifeless[id]->obj.id     = id;
-                    listlifeless[id]->idmap      = opmap;
-                    listlifeless[id]->obj.d2     = tchar->obj.d;
-                    listlifeless[id]->obj.d      = tchar->obj.d;
-
-                    listlifeless[id]->obj.x = tchar->obj.x;
-                    listlifeless[id]->obj.y = tchar->obj.y;
-
-                    tchar->listlifeless[tchar->totlifeless] = listlifeless[id];
-                    tchar->totlifeless++;
-                }
-                */
 
                 // se for o ultimo sprite e o objeto não estiver travado, gasta stamina
                 if sprite.last || !self.obj.lock {
@@ -1097,7 +1271,7 @@ impl Scene {
         let info = Info::from_config(width);
         let gates = Gate::from_config(&config_file);
 
-        al_play_sample(sound, 1.0, 0.0, 1.0, AlPlaymode::ALLEGRO_PLAYMODE_LOOP, ptr::null_mut());
+        al_play_sample(sound, VOLUME * 1.0, 0.0, 1.0, AlPlaymode::ALLEGRO_PLAYMODE_LOOP, ptr::null_mut());
 
         Scene {
             ex: 0,

@@ -27,10 +27,10 @@ impl IntroScreen {
         let fonte = al_load_font("assets/Fonts/font_intro.TTF", 20, 0);
 
         let music = al_load_sample("assets/Songs/Intro/intro_music.ogg");
-        al_play_sample(music, 1.0, 0.0, 1.0, AlPlaymode::ALLEGRO_PLAYMODE_LOOP, ptr::null_mut());
+        al_play_sample(music, VOLUME * 1.0, 0.0, 1.0, AlPlaymode::ALLEGRO_PLAYMODE_LOOP, ptr::null_mut());
 
         let narrative = al_load_sample("assets/Songs/Intro/intro_narrative.ogg");
-        al_play_sample(narrative, 2.0, 0.0, 1.0, AlPlaymode::ALLEGRO_PLAYMODE_ONCE, ptr::null_mut());
+        al_play_sample(narrative, VOLUME * 2.0, 0.0, 1.0, AlPlaymode::ALLEGRO_PLAYMODE_ONCE, ptr::null_mut());
 
         let texto = Self::carregar_texto(&config_file);
         let speed: f32 = config_file.get("speed_text").expect("speed_text não encontrado");

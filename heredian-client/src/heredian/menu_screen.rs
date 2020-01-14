@@ -11,7 +11,7 @@ impl MenuScreen {
         let fonte = al_load_font("assets/Fonts/font_menu.ttf", 100, 0);
         let image = al_load_bitmap("assets/Images/Menu.png");
         let music = al_load_sample("assets/Songs/Menu/music.ogg");
-        al_play_sample(music, 1.0, 0.0, 1.0, AlPlaymode::ALLEGRO_PLAYMODE_LOOP, ptr::null_mut());
+        al_play_sample(music, VOLUME * 1.0, 0.0, 1.0, AlPlaymode::ALLEGRO_PLAYMODE_LOOP, ptr::null_mut());
 
         let musicsel = al_load_sample("assets/Songs/Menu/musicsel.ogg");
         let musicconfirm = al_load_sample("assets/Songs/Menu/musicconfirm.ogg");
@@ -70,19 +70,19 @@ impl MenuScreen {
                 AlEventType::ALLEGRO_EVENT_KEY_DOWN => {
                     match evento.get_keyboard().keycode {
                         ALLEGRO_KEY_DOWN => {
-                            al_play_sample_b(musicsel, 2.0, 0.0, 1.0, AlPlaymode::ALLEGRO_PLAYMODE_ONCE, ptr::null_mut());
+                            al_play_sample_b(musicsel, VOLUME * 2.0, 0.0, 1.0, AlPlaymode::ALLEGRO_PLAYMODE_ONCE, ptr::null_mut());
                             if nopcao < textos.len()-1 {
                                 nopcao += 1;
                             }
                         },
                         ALLEGRO_KEY_UP => {
-                            al_play_sample_b(musicsel, 2.0, 0.0, 1.0, AlPlaymode::ALLEGRO_PLAYMODE_ONCE, ptr::null_mut());
+                            al_play_sample_b(musicsel, VOLUME * 2.0, 0.0, 1.0, AlPlaymode::ALLEGRO_PLAYMODE_ONCE, ptr::null_mut());
                             if nopcao > 0  {
                                 nopcao -= 1;
                             }
                         },
                         ALLEGRO_KEY_ENTER => {
-                            al_play_sample(musicconfirm, 1.0, 0.0, 1.0, AlPlaymode::ALLEGRO_PLAYMODE_ONCE, ptr::null_mut());
+                            al_play_sample(musicconfirm, VOLUME * 1.0, 0.0, 1.0, AlPlaymode::ALLEGRO_PLAYMODE_ONCE, ptr::null_mut());
                             al_rest(1.0);
                             break;
                         },

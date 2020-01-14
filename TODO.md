@@ -1,8 +1,8 @@
-* draw lifeless of char
+* ~~draw lifeless of char~~
 * ~~change sprite's first and last attribute type to bool~~
 * ~~make collision works~~
 * ~~change ambient when over gates~~
-* draw lifeless
+* ~~draw lifeless~~
 * ~~draw char info~~
 * ~~fix update char status~~
 * ~~fix camera's zoom up and down~~
