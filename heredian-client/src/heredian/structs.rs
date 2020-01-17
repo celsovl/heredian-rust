@@ -945,7 +945,7 @@ impl Char {
         }
 
         // clear lifeless dead
-        self.list_lifeless = self.list_lifeless.drain(..).filter(|l| !l.dead).collect();
+        self.list_lifeless.retain(|l| !l.dead);
 
         // move back if collided
         if self.collided(state_data) {
@@ -1034,10 +1034,10 @@ impl Char {
 
         let sprite_size = (sprite.rect.2 - sprite.rect.0, sprite.rect.3 - sprite.rect.1);
 
-        // adjust object width 
+        // adjust object width / height
         self.obj.wd = self.obj.w * (sprite.rect.2 - sprite.rect.0) as f32;
         self.obj.hd = self.obj.h * (sprite.rect.3 - sprite.rect.1) as f32;
-
+        
         //gdp_movsprite(&tchar->obj,&oactions[acao]);
 
         let frame = al_create_sub_bitmap(
