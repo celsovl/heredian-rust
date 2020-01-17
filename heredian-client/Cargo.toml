@@ -8,4 +8,4 @@ edition = "2018"
 
 [dependencies]
 libc = "0.2.0"
-allegro = { path = "../allegro" }
+heredian-lib = { path = "../heredian-lib" }

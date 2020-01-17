@@ -3,7 +3,8 @@ use std::thread::{self, JoinHandle};
 use std::time;
 use std::sync::mpsc::{channel, Sender};
 
-use crate::heredian::allegro_safe::*;
+use heredian_lib::*;
+use heredian_lib::allegro_safe::*;
 use crate::heredian::structs::*;
 
 #[derive(Default)]

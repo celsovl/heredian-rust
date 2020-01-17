@@ -11,10 +11,6 @@ use crate::heredian::game_screen::*;
 
 pub mod heredian;
 
-const WIDTH: i32 = 800;
-const HEIGHT: i32 = 600;
-static TITLE: &str = "Heredian";
-
 fn main() {
     let mut state = gdp_init();
     state.init();

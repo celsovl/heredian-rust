@@ -1,7 +1,7 @@
 use std::ptr;
 
-use super::allegro_safe::*;
-use super::file_manager::*;
+use heredian_lib::allegro_safe::*;
+use heredian_lib::file_manager::*;
 use super::structs::*;
 
 pub struct IntroScreen;

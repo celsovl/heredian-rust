@@ -1,6 +1,6 @@
 use std::ptr;
 
-use crate::heredian::allegro_safe::*;
+use heredian_lib::allegro_safe::*;
 use crate::heredian::structs::*;
 
 pub struct SelectCharScreen;

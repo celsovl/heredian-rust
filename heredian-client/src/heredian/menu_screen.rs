@@ -1,6 +1,6 @@
 use std::ptr;
 
-use super::allegro_safe::*;
+use heredian_lib::allegro_safe::*;
 use super::structs::*;
 
 pub struct MenuScreen;

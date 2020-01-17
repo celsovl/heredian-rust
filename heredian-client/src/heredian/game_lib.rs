@@ -1,8 +1,13 @@
 use std::ptr;
 
-use super::file_manager::*;
+use heredian_lib::{LIFELESS, CHARS};
+use heredian_lib::file_manager::*;
+use heredian_lib::allegro_safe::*;
 use super::structs::*;
-use super::allegro_safe::*;
+
+const WIDTH: i32 = 800;
+const HEIGHT: i32 = 600;
+static TITLE: &str = "Heredian";
 
 pub fn gdp_init() -> GameState {
     let config_file = ConfigFile::load("assets/Configs/server.txt");
@@ -25,9 +30,9 @@ pub fn gdp_init() -> GameState {
         fps: 0.0,
         last_time: 0.0,
 
-        width: 800,
-        height: 600,
-        title: "Heredian",
+        width: WIDTH,
+        height: HEIGHT,
+        title: TITLE,
 
         local_char_id: 0,
         nclose_game: 0,

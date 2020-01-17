@@ -3,21 +3,11 @@ use std::collections::VecDeque;
 use std::path::Path;
 use std::sync::mpsc::{Sender, Receiver};
 
-use crate::heredian::allegro_safe::*;
-
-use super::file_manager::ConfigFile;
+use heredian_lib::*;
+use heredian_lib::allegro_safe::*;
+use heredian_lib::file_manager::ConfigFile;
 
 pub const VOLUME: f32 = 0.2;
-
-pub const GDPLEFT: i32 = 1;
-pub const GDPRIGHT: i32 = 2;
-pub const GDPUP: i32 = 4;
-pub const GDPDOWN: i32 = 8;
-pub const DIRECTIONS: usize = 4;
-pub const CHARS: usize =  30;
-pub const LIFELESS: usize =  20;
-pub const MAXCHARLIFELESS: usize =  5;
-
 pub const FPS: f64 = 60.0;
 
 #[derive(PartialEq)]
@@ -367,41 +357,6 @@ impl Drop for Scene {
             al_destroy_sample(self.musicback);
         }
     }
-}
-
-
-#[derive(Default, Debug)]
-pub struct PacketLifelessInfo {
-    pub x: i16,
-    pub y: i16,
-    pub w: i16,
-    pub h: i16,
-    pub d: i16,
-    pub damage: i16,
-}
-
-#[derive(Default, Debug)]
-pub struct PacketCharInfo {
-    pub x: i16,
-    pub y: i16,
-    pub w: i16,
-    pub h: i16,
-    pub a: i16,
-    pub d: i16,
-    pub dhit: i16,
-    pub numchar: i16,
-    pub idchar: i16,
-    pub totchar: i16,
-    pub totenemies: i16,
-    pub exit: bool,
-    pub healt: i16,
-    pub stamina: i16,
-    pub damage: i16,
-    pub idmap: i16,
-    pub totlifeless: i16,
-	pub step: i16,
-    pub vision: i16,
-    pub listlifeless: [Option<PacketLifelessInfo>; MAXCHARLIFELESS],
 }
 
 #[derive(Debug)]
