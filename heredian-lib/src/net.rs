@@ -5,7 +5,7 @@ use std::mem;
 use std::time::{Duration};
 use std::io::{Write, Read};
 use std::net::{TcpListener, TcpStream, SocketAddr, SocketAddrV4, Ipv4Addr};
-use std::sync::mpsc::{channel, Sender, TryRecvError};
+use std::sync::mpsc::{channel, Sender, Receiver, TryRecvError};
 use std::thread;
 
 pub const MAXCHARLIFELESS: usize =  5;
@@ -154,7 +154,7 @@ impl FromBytes for PacketCharInfo {
 impl ToBytes for PacketCharInfo {
     fn to_bytes(&self) -> Vec<u8> {
         let mut buf = vec![0u8; mem::size_of_val(self)];
-        println!("ToBytes buf size: {}", buf.len());
+
         buf[0..2].copy_from_slice(&self.x.to_le_bytes());
         buf[2..4].copy_from_slice(&self.y.to_le_bytes());
         buf[4..6].copy_from_slice(&self.w.to_le_bytes());
@@ -191,58 +191,14 @@ impl ToBytes for PacketCharInfo {
     }
 }
 
-pub trait MessageHandler {
-    type TData: 'static + fmt::Debug + ToBytes + FromBytes + Send + Default;
-    fn on_message(&self, msg: &Self::TData);
-}
-
-pub struct ClientMessageHandler<TData>(marker::PhantomData<TData>);
-
-impl<TData> ClientMessageHandler<TData> {
-    pub fn new() -> Self {
-        Self(marker::PhantomData)
-    }
-}
-
-impl<TData> MessageHandler for ClientMessageHandler<TData>
-    where
-        TData: 'static + fmt::Debug + ToBytes + FromBytes + Send + Default {
-
-    type TData = TData;
-
-    fn on_message(&self, msg: &TData) {
-        println!("client: {:?}", msg);
-    }
-}
-
-pub struct ServerMessageHandler<TData>(marker::PhantomData<TData>);
-
-impl<TData> ServerMessageHandler<TData> {
-    pub fn new() -> Self {
-        Self(marker::PhantomData)
-    }
-}
-
-impl<TData> MessageHandler for ServerMessageHandler<TData>
-    where
-        TData: 'static + fmt::Debug + ToBytes + FromBytes + Send + Default {
-
-    type TData = TData;
-
-    fn on_message(&self, msg: &TData) {
-        println!("server: {:?}", msg);
-    }
-}
-
-pub struct Client<THandler: MessageHandler> {
+pub struct Client<TMsg: 'static + fmt::Debug + ToBytes + FromBytes + Send + Default> {
     stream: Option<TcpStream>,
-    handlers: Option<Vec<THandler>>,
-    sender: Option<Sender<THandler::TData>>
+    chan: Option<(Sender<TMsg>, Receiver<TMsg>)>
 }
 
-impl<THandler> Client<THandler>
+impl<TMsg> Client<TMsg>
     where
-        THandler: MessageHandler + Send + 'static {
+        TMsg: 'static + fmt::Debug + ToBytes + FromBytes + Send + Default {
 
     pub fn connect(address: &SocketAddr) -> Self {
         let stream = TcpStream::connect_timeout(address, Duration::from_secs(10)).expect("It must connect to server.");
@@ -250,32 +206,28 @@ impl<THandler> Client<THandler>
         stream.set_nonblocking(true).unwrap();
 
         Self {
-            handlers: Some(Default::default()),
             stream: Some(stream),
-            sender: None,
+            chan: None,
         }
     }
 
-    pub fn add_handler(&mut self, handler: THandler) {
-        match self.handlers.as_mut() {
-            Some(handlers) => handlers.push(handler),
-            None => panic!("Can't add handlers after start.")
-        }
+    pub fn send(&self, msg: TMsg) {
+        self.chan.as_ref().unwrap().0.send(msg).unwrap();
     }
 
-    pub fn send(&mut self, msg: THandler::TData) {
-        self.sender.as_ref().unwrap().send(msg).unwrap();
+    pub fn recv(&self) -> TMsg {
+        self.chan.as_ref().unwrap().1.recv().unwrap()
     }
 
     pub fn start(&mut self) {
-        let (tx, rx) = channel();
-        let mut stream = self.stream.take().unwrap();
-        let mut handlers = self.handlers.take().unwrap();
+        let (tx, rx) = channel(); // send channel
+        let (r_tx, r_rx) = channel(); // recv channel
 
-        self.sender = Some(tx);
+        let mut stream = self.stream.take().unwrap();
+        self.chan = Some((tx, r_rx));
 
         thread::spawn(move || {
-            let mut buf = vec![0;std::mem::size_of::<Packet<THandler::TData>>()];
+            let mut buf = vec![0;std::mem::size_of::<Packet<TMsg>>()];
 
             loop {
                 let mut done_something = false;
@@ -283,7 +235,7 @@ impl<THandler> Client<THandler>
                 // sender part
                 match rx.try_recv() {
                     Ok(msg) => {
-                        let packet = Packet::<THandler::TData> {
+                        let packet = Packet::<TMsg> {
                             sign: b"GDP".to_owned(),
                             size: buf.len() as u16,
                             data: msg
@@ -304,10 +256,7 @@ impl<THandler> Client<THandler>
                         stream.read_exact(&mut buf[0..size]).unwrap();
 
                         let packet = Packet::from_bytes(&buf[0..size].to_owned());
-
-                        for handler in handlers.iter_mut() {
-                            handler.on_message(&packet.data);
-                        }
+                        r_tx.send(packet.data).unwrap();
                         
                         done_something = true;
                     },
@@ -328,79 +277,45 @@ impl<THandler> Client<THandler>
 pub enum Message<TMsg>
     where 
         TMsg: 'static + fmt::Debug + ToBytes + FromBytes + Send + Default {
+    Accepted(SocketAddr),
     Broadcast(TMsg),
     BroadcastExcept(TMsg, SocketAddr),
-    Direct(TMsg, SocketAddr)
+    Direct(TMsg, SocketAddr),
 }
 
-impl<TMsg> Default for Message<TMsg>
-    where 
-        TMsg: 'static + fmt::Debug + ToBytes + FromBytes + Send + Default {
-    
-    fn default() -> Self {
-        Self::Broadcast(TMsg::default())
-    }
-}
-
-impl<TMsg> FromBytes for Message<TMsg>
-    where 
-        TMsg: 'static + fmt::Debug + ToBytes + FromBytes + Send + Default {
-    
-    fn from_bytes(buf: &[u8]) -> Self {
-        Self::Broadcast(TMsg::from_bytes(buf))
-    }
-}
-
-impl<TMsg> ToBytes for Message<TMsg>
-    where 
-        TMsg: 'static + fmt::Debug + ToBytes + FromBytes + Send + Default {
-    
-    fn to_bytes(&self) -> Vec<u8> {
-        let msg = match self {
-            Self::Broadcast(msg) => msg,
-            Self::BroadcastExcept(msg, _) => msg,
-            Self::Direct(msg, _) => msg
-        };
-
-        msg.to_bytes()
-    }
-}
-
-pub struct Server<THandler: MessageHandler<TData=Message<TMsg>>, TMsg>
+pub struct Server<TMsg>
     where
         TMsg: 'static + fmt::Debug + ToBytes + FromBytes + Send + Default {
 
-    handlers: Option<Vec<THandler>>,
-    sender: Option<Sender<THandler::TData>>,
+    chan: Option<(Sender<Message<TMsg>>, Receiver<Message<TMsg>>)>,
 }
 
-impl<THandler, TMsg> Server<THandler, TMsg>
+impl<TMsg> Server<TMsg>
     where
-        THandler: MessageHandler<TData=Message<TMsg>> + Send + 'static,
         TMsg: 'static + fmt::Debug + ToBytes + FromBytes + Send + Default {
 
     pub fn new() -> Self {
         Self {
-            handlers: Some(Vec::new()),
-            sender: None
+            chan: None
         }
     }
 
-    pub fn add_handler(&mut self, handler: THandler) {
-        match self.handlers.as_mut() {
-            Some(handlers) => handlers.push(handler),
-            None => panic!("Can't add handlers after start listening.")
+    pub fn send(&self, msg: Message<TMsg>) {
+        if let Message::Accepted(_) = msg {
+            panic!("This type of message is not allowed to be sent.");
         }
+
+        self.chan.as_ref().unwrap().0.send(msg).unwrap();
     }
 
-    pub fn send(&mut self, msg: THandler::TData) {
-        self.sender.as_ref().unwrap().send(msg).unwrap();
+    pub fn recv(&self) -> Message<TMsg> {
+        self.chan.as_ref().unwrap().1.recv().unwrap()
     }
 
     pub fn listen(&mut self, port: u16) {
-        let (tx, rx) = channel();
-        let mut handlers = self.handlers.take().unwrap();
-        self.sender = Some(tx);
+        let (tx, rx) = channel(); // send channel
+        let (r_tx, r_rx) = channel(); // receive channel
+        self.chan = Some((tx, r_rx));
 
         thread::spawn(move || {
             let addr = SocketAddrV4::new(Ipv4Addr::new(127,0,0,1), port);
@@ -418,6 +333,8 @@ impl<THandler, TMsg> Server<THandler, TMsg>
                     stream.set_nonblocking(true).unwrap();
                     stream.set_nodelay(true).unwrap();
                     clients.push((stream, addr));
+
+                    r_tx.send(Message::Accepted(addr)).unwrap();
 
                     done_something = true;
                 }
@@ -455,7 +372,8 @@ impl<THandler, TMsg> Server<THandler, TMsg>
                                 let packet = Packet::<TMsg>::new(msg);
                                 let packet_bytes = packet.to_bytes();
                                 stream.write_all(&packet_bytes).unwrap();
-                            }
+                            },
+                            Message::Accepted(_) => unreachable!(),
                         }
 
                         done_something = true;
@@ -472,10 +390,8 @@ impl<THandler, TMsg> Server<THandler, TMsg>
     
                             let packet = Packet::<TMsg>::from_bytes(&buf[0..size].to_owned());
                             let msg = Message::Direct(packet.data, *client_addr);
-    
-                            for handler in handlers.iter_mut() {
-                                handler.on_message(&msg);
-                            }
+
+                            r_tx.send(msg).unwrap();
                             
                             done_something = true;
                         },
@@ -522,11 +438,8 @@ mod tests {
             }
         });
 
-        let handler = ClientMessageHandler::new();
-
         let addr = SocketAddrV4::new(Ipv4Addr::new(127,0,0,1), 34000);
         let mut client = Client::connect(&SocketAddr::V4(addr));
-        client.add_handler(handler);
         client.start();
 
         client.send(PacketCharInfo {
@@ -566,17 +479,11 @@ mod tests {
 
     #[test]
     fn usage_client_server() {
-        let server_handler = ServerMessageHandler::<Message<PacketCharInfo>>::new();
-
         let mut server = Server::new();
-        server.add_handler(server_handler);
         server.listen(34000);
-
-        let handler = ClientMessageHandler::new();
 
         let addr = SocketAddrV4::new(Ipv4Addr::new(127,0,0,1), 34000);
         let mut client = Client::connect(&SocketAddr::V4(addr));
-        client.add_handler(handler);
         client.start();
 
         let packet = PacketCharInfo {
@@ -614,7 +521,21 @@ mod tests {
 
         client.send(packet.clone());
         server.send(Message::Broadcast(packet.clone()));
-        thread::sleep(Duration::from_secs(5));
+
+        let packet2 = client.recv();
+        assert_eq!(packet, packet2);
+
+        let msg = server.recv();
+        match msg {
+            Message::Accepted(_) => (),
+            _ => panic!("Unexpected type of message")
+        }
+        
+        let msg = server.recv();
+        match msg {
+            Message::Direct(packet3, _) => assert_eq!(packet2, packet3),
+            _ => panic!("Unexpected type of message")
+        }
     }
 
     #[test]
