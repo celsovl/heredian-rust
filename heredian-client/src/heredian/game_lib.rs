@@ -16,7 +16,7 @@ pub fn gdp_init() -> GameState {
         ambient: None,
         list_lifeless: Vec::with_capacity(LIFELESS),
         list_chars: Vec::with_capacity(CHARS),
-        ncanaisaudio: 3,
+        ncanaisaudio: 4,
         connect_erro: false,
         total_lifeless: 0,
         total_chars: 4,

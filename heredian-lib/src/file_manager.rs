@@ -20,10 +20,6 @@ impl ConfigFile {
         for line in buf.lines() {
             let line = line.unwrap();
             
-            if line.trim_end() == "" {
-                continue;
-            }
-
             let truncate_idx = 
                 match (line.find(";"), line.find("#")) {
                     (Some(idxsemi), Some(idxhash)) => std::cmp::min(idxsemi, idxhash),
@@ -34,7 +30,15 @@ impl ConfigFile {
 
             let (line, _) = line.split_at(truncate_idx);
 
+            if line.trim_end() == "" {
+                continue;
+            }
+
             let splitted: Vec<_> = line.split("=").collect();
+            if splitted.len() < 2 {
+                panic!("Line unexpected: '{}'", line);
+            }
+
             if splitted[1] != "NULL" {
                 cache.insert(
                     splitted[0].to_string(),

@@ -1,0 +1,6 @@
+qt_maps=5;
+map1=assets/Models/Mold1.png;
+map2=assets/Models/Mold2.png;
+map3=assets/Models/Mold3.png;
+map4=assets/Models/Mold4.png;
+map5=assets/Models/Mold5.png;

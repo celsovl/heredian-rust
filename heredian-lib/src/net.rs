@@ -4,7 +4,7 @@ use std::mem;
 use std::time::{Duration};
 use std::io::{Write, Read};
 use std::net::{TcpListener, TcpStream, SocketAddr, SocketAddrV4, Ipv4Addr};
-use std::sync::mpsc::{channel, Sender, Receiver, TryRecvError};
+use std::sync::mpsc::{channel, Sender, Receiver, TryRecvError, RecvTimeoutError};
 use std::thread;
 
 use super::*;
@@ -88,6 +88,14 @@ impl<TMsg> Client<TMsg>
         self.chan.as_ref().unwrap().1.recv().unwrap()
     }
 
+    pub fn try_recv(&self) -> Result<TMsg, TryRecvError> {
+        self.chan.as_ref().unwrap().1.try_recv()
+    }
+
+    pub fn recv_timeout(&self, timeout: Duration) -> Result<TMsg, RecvTimeoutError> {
+        self.chan.as_ref().unwrap().1.recv_timeout(timeout)
+    }
+
     pub fn start(&mut self) {
         let (tx, rx) = channel(); // send channel
         let (r_tx, r_rx) = channel(); // recv channel
@@ -131,11 +139,11 @@ impl<TMsg> Client<TMsg>
                     },
                     Ok(_) => (),
                     Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => (),
-                    Err(e) => panic!(e)
+                    Err(e) => panic!("{}", e)
                 }
 
                 if !done_something {
-                    thread::yield_now();
+                    thread::sleep(Duration::from_millis(16));
                 }
             }
         });
@@ -150,6 +158,7 @@ pub enum Message<TMsg>
     Broadcast(TMsg),
     BroadcastExcept(TMsg, SocketAddr),
     Direct(TMsg, SocketAddr),
+    Disconnected(SocketAddr)
 }
 
 pub struct Server<TMsg>
@@ -170,11 +179,16 @@ impl<TMsg> Server<TMsg>
     }
 
     pub fn send(&self, msg: Message<TMsg>) {
-        if let Message::Accepted(_) = msg {
-            panic!("This type of message is not allowed to be sent.");
+        match msg {
+            Message::Accepted(_) | Message::Disconnected(_) => panic!("This type of message is not allowed to be sent."),
+            _ => ()
         }
 
         self.chan.as_ref().unwrap().0.send(msg).unwrap();
+    }
+
+    pub fn try_recv(&self) -> Result<Message<TMsg>, TryRecvError> {
+        self.chan.as_ref().unwrap().1.try_recv()
     }
 
     pub fn recv(&self) -> Message<TMsg> {
@@ -208,6 +222,8 @@ impl<TMsg> Server<TMsg>
                     done_something = true;
                 }
 
+                let mut errors = Vec::new();
+
                 // check send data channel
                 // sender part
                 match rx.try_recv() {
@@ -219,9 +235,10 @@ impl<TMsg> Server<TMsg>
 
                                 clients
                                     .iter_mut()
-                                    .map(|(c, _)| c)
-                                    .for_each(|stream| {
-                                        stream.write_all(&packet_bytes).unwrap();
+                                    .for_each(|(stream, addr)| {
+                                        if let Err(_) = stream.write_all(&packet_bytes) {
+                                            errors.push(*addr);
+                                        }
                                     });
                             },
                             Message::BroadcastExcept(msg, client_addr) => {
@@ -231,24 +248,43 @@ impl<TMsg> Server<TMsg>
                                 clients
                                     .iter_mut()
                                     .filter(|(_, addr)| *addr != client_addr)
-                                    .map(|(c, _)| c)
-                                    .for_each(|stream| {
-                                        stream.write_all(&packet_bytes).unwrap();
+                                    .for_each(|(stream, addr)| {
+                                        if let Err(_) = stream.write_all(&packet_bytes) {
+                                            errors.push(*addr);
+                                        }
                                     });
                             },
                             Message::Direct(msg, client_addr) => {
-                                let stream = clients.iter_mut().find(|(_, addr)| *addr == client_addr).map(|(c, _)| c).unwrap();
+                                let (stream, addr) = clients.iter_mut().find(|(_, addr)| *addr == client_addr).unwrap();
                                 let packet = Packet::<TMsg>::new(msg);
                                 let packet_bytes = packet.to_bytes();
-                                stream.write_all(&packet_bytes).unwrap();
+
+                                if let Err(_) = stream.write_all(&packet_bytes) {
+                                    errors.push(*addr);
+                                }
+
                             },
-                            Message::Accepted(_) => unreachable!(),
+                            _ => unreachable!(),
                         }
 
                         done_something = true;
                     },
                     Err(TryRecvError::Disconnected) => println!("Can't send message. Channel disconnected."),
                     Err(TryRecvError::Empty) => ()
+                }
+
+                // something went wrong
+                if !errors.is_empty() {
+                    // notify server
+                    errors.iter().for_each(|addr| {
+                        r_tx.send(Message::Disconnected(*addr)).unwrap();
+                    });
+
+                    // clear fault stream
+                    clients.retain(|(_, addr)| !errors.contains(addr));
+
+                    // clear errors
+                    errors.clear();
                 }
 
                 // check recv TCP data and send
@@ -266,12 +302,26 @@ impl<TMsg> Server<TMsg>
                         },
                         Ok(_) => (),
                         Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => (),
-                        Err(e) => panic!(e)
+                        Err(_) => errors.push(*client_addr),
                     }
                 }
 
+                // something went wrong
+                if !errors.is_empty() {
+                    // notify server
+                    errors.iter().for_each(|addr| {
+                        r_tx.send(Message::Disconnected(*addr)).unwrap();
+                    });
+
+                    // clear fault stream
+                    clients.retain(|(_, addr)| !errors.contains(addr));
+
+                    // clear errors
+                    errors.clear();
+                }
+
                 if !done_something {
-                    thread::yield_now();
+                    thread::sleep(Duration::from_millis(16));
                 }
             }
         });

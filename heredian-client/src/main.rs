@@ -29,7 +29,7 @@ fn main() {
 
             LoadingScreen::show(&state);
 
-            let mut game = GameScreen::<SimulatedConnection>::new();
+            let mut game = GameScreen::new();
             game.show(&mut state);
         }
     }

@@ -1,104 +1,50 @@
 use std::cmp::{Ord, Ordering};
-use std::thread::{self, JoinHandle};
-use std::time;
-use std::sync::mpsc::{channel, Sender};
+use std::net::{SocketAddr, SocketAddrV4, Ipv4Addr};
+use std::time::{Duration, Instant};
+use std::thread;
 
 use heredian_lib::*;
+use heredian_lib::net::{Client};
 use heredian_lib::allegro_safe::*;
 use crate::heredian::structs::*;
 
-#[derive(Default)]
-pub struct SimulatedConnection {
-    io_joinhandle: Option<JoinHandle<()>>,
+pub struct GameScreen {
+    client: Option<Client<PacketCharInfo>>
 }
 
-impl SimulatedConnection {
-    pub fn run_simulation((tx, rx): Chan<PacketCharInfo>) {
-        let spf = time::Duration::from_secs_f32(1.0/60.0);
+impl GameScreen {
 
-        Self::send_creation_char_info(&tx);
-
-        loop {
-            // try recv char_info and print its position
-            if let Ok(char_info) = rx.try_recv() {
-                println!("local char pos: ({}, {})", char_info.x, char_info.y);
-            }
-
-            thread::sleep(spf);
-        }
-    }
-
-    pub fn send_creation_char_info(tx: &Sender<PacketCharInfo>) {
-        // send char creation info
-        let char_info = PacketCharInfo {
-            x: 0i16,
-            y: 0i16,
-            w: 0i16,
-            h: 0i16,
-            a: 0i16,
-            d: 0i16,
-            dhit: 0i16,
-            numchar: 0i16,
-            idchar: 0i16,
-            totchar: 0i16,
-            totenemies: 0i16,
-            exit: false,
-            healt: 0i16,
-            stamina: 0i16,
-            damage: 0i16,
-            idmap: 0i16,
-            totlifeless: 0i16,
-            step: 0i16,
-            vision: 0i16,
-            listlifeless: Default::default(),
-        };
-
-        tx.send(char_info).unwrap();
-    }
-}
-
-impl Connection for SimulatedConnection {
-    fn connect(&mut self) -> Chan<PacketCharInfo> {
-        // for tx
-        let (my_tx, other_rx) = channel();
-        // for rx
-        let (other_tx, my_rx) = channel();
-
-        let io_joinhandle = thread::spawn(move || Self::run_simulation((my_tx, my_rx)));
-        self.io_joinhandle = Some(io_joinhandle);
-
-        (other_tx, other_rx)
-    }
-
-    fn close(&mut self) {
-    }
-}
-
-pub struct GameScreen<T: Connection + Default> {
-    connection: T,
-    chan: Option<Chan<PacketCharInfo>>
-}
-
-impl<T: Connection + Default> GameScreen<T> {
-
-    pub fn new() -> GameScreen<T> {
-        GameScreen::<T> {
-            connection: T::default(),
-            chan: None
+    pub fn new() -> GameScreen {
+        GameScreen {
+            client: None
         }
     }
 
     fn init(&mut self, state: &mut GameState) {
-        let chan = self.connection.connect();
+        let address = SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), 34000));
+        let mut client = Client::<PacketCharInfo>::connect(&address);
+        client.start();
 
-        let char_info = 
-            match chan.1.recv_timeout(time::Duration::from_secs(30)) {
-                Ok(info) => info,
-                Err(e) => panic!("Character creation timed out. More: {}", e)
+        let now = Instant::now();
+
+        let char_info =
+            loop {
+                if now.elapsed() < Duration::from_secs(30) {
+                    match client.try_recv() {
+                        Ok(info) if info.numchar == 0 => break info,
+                        Ok(_) | Err(_) => ()
+                    }
+                } else {
+                    panic!("Character creation timed out.");
+                }
+
+                thread::yield_now();
             };
 
         let ambient = Scene::load(state.opmap, state.width, state.height);
         state.local_char_id = char_info.idchar as usize;
+        
+        println!("New ID: {:?}", char_info);
 
         let mut local_char = Char::load(state.opchar.unwrap() as i32);
         local_char.idmap = state.opmap;
@@ -110,7 +56,7 @@ impl<T: Connection + Default> GameScreen<T> {
         state.list_chars.push(local_char);
         state.ambient = Some(ambient);
 
-        self.chan = Some(chan);
+        self.client = Some(client);
     }
 
     fn close(&mut self, state: &mut GameState) {
@@ -175,8 +121,10 @@ impl<T: Connection + Default> GameScreen<T> {
         // objects with a lower bottom position (i.e. up on the display) are drawn first
         let mut objects = Vec::with_capacity(state.list_chars.len() + state.list_lifeless.len());
 
-        objects.extend(state.list_chars.iter_mut().map(|c: &mut Char| ((c.obj.y + c.obj.h) as i32, CharOrLifeless::Char(c))));
-        objects.extend(state.list_lifeless.iter_mut().map(|l: &mut Lifeless| ((l.obj.y + l.obj.h) as i32, CharOrLifeless::Lifeless(l))));
+        let idmap = state.ambient.as_ref().unwrap().id;
+
+        objects.extend(state.list_chars.iter_mut().filter(|c| c.idmap == idmap).map(|c: &mut Char| ((c.obj.y + c.obj.h) as i32, CharOrLifeless::Char(c))));
+        objects.extend(state.list_lifeless.iter_mut().filter(|l| l.idmap == idmap).map(|l: &mut Lifeless| ((l.obj.y + l.obj.h) as i32, CharOrLifeless::Lifeless(l))));
         objects.sort();
 
         for (_, object) in objects {
@@ -192,7 +140,7 @@ impl<T: Connection + Default> GameScreen<T> {
         let fonte = ambient.info.fonte;
 
         // draw char info (health, stamina, ...)
-        for (i, c) in state.list_chars.iter().enumerate() {
+        for (i, c) in state.list_chars.iter().filter(|c| c.obj.r#type <= 4).enumerate() {
             c.draw_info(state, i as i32);
         }
         
@@ -233,6 +181,55 @@ impl<T: Connection + Default> GameScreen<T> {
         al_use_transform(&camera);
     }
 
+    fn recv_once(&mut self, state: &mut GameState) {
+        if let Some(client) = self.client.as_ref() {
+            while let Ok(msg) = client.try_recv() {
+                let that_char = state.list_chars.iter_mut().find(|c| c.obj.idchar as i16 == msg.idchar);
+
+                let that_char =
+                    if let Some(that_char) = that_char {
+                        // replace if found is dead and not an enemy
+                        if that_char.dead && msg.numchar <= 4 {
+                            *that_char = Char::load(msg.numchar as i32);
+                        }
+
+                        that_char
+                    } else {
+                        // load new char
+                        let that_char = Char::load(msg.numchar as i32);
+                        state.list_chars.push(that_char);
+                        state.list_chars.last_mut().unwrap()
+                    };
+
+                if that_char.info.healt != msg.healt as i32 {
+                    match msg.dhit as i32 {
+                        GDPUP => that_char.obj.y -= 1.0,
+                        GDPDOWN => that_char.obj.y += 1.0,
+                        GDPLEFT => that_char.obj.x -= 1.0,
+                        GDPRIGHT => that_char.obj.x -= 1.0,
+                        _ => ()
+                    }
+                }
+
+                if !msg.exit {
+                    if msg.idchar as usize != state.local_char_id && that_char.obj.a != 4 {
+                        that_char.dead = false;
+                        that_char.obj.id = msg.idchar as i32;
+                        that_char.obj.idchar = msg.idchar as i32;
+                        that_char.obj.a = msg.a as i32;
+                        that_char.obj.d = msg.d as i32;
+                        that_char.obj.x = msg.x as f32;
+                        that_char.obj.y = msg.y as f32;
+                        that_char.info.stamina = msg.stamina as i32;
+                        that_char.idmap = msg.idmap as i32;
+                    }
+                } else {
+                    that_char.dead = true;
+                }
+            }
+        }
+    }
+
     fn run_loop(&mut self, state: &mut GameState) {
         let mut evento = AlEvent::default();
 
@@ -248,6 +245,7 @@ impl<T: Connection + Default> GameScreen<T> {
                         continue;
                     }
 
+                    self.recv_once(state);
                     self.update(state);
                     self.draw(state);
                 },
@@ -273,16 +271,16 @@ impl<T: Connection + Default> GameScreen<T> {
     fn update(&mut self, state: &mut GameState) {
         self.update_scale(state);
 
-        match self.chan.as_ref() {
-            Some(chan) => {
+        match self.client.as_ref() {
+            Some(client) => {
                 loop {
-                    match chan.1.try_recv() {
+                    match client.try_recv() {
                         Ok(char_info) => state.update_char(char_info),
                         Err(_) => break
                     }
                 }
 
-                state.update_local_char(chan);
+                state.update_local_char(client);
             },
             None => panic!("No channel available for propagation of local char's changes.")
         }

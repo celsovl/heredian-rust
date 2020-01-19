@@ -1,0 +1,15 @@
+5vision=150;
+5step=1;
+5damage=10;
+6vision=200;
+6step=2;
+6damage=20;
+7vision=200;
+7step=3;
+7damage=40;
+8vision=250;
+8step=4;
+8damage=50;
+9vision=1000;
+9step=5;
+9damage=10;

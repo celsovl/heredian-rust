@@ -1,11 +1,11 @@
 use std::ptr;
 use std::collections::VecDeque;
 use std::path::Path;
-use std::sync::mpsc::{Sender, Receiver};
 
 use heredian_lib::*;
 use heredian_lib::allegro_safe::*;
 use heredian_lib::file_manager::ConfigFile;
+use heredian_lib::net::{Client};
 
 pub const VOLUME: f32 = 0.2;
 pub const FPS: f64 = 60.0;
@@ -25,13 +25,6 @@ pub enum OpcaoChar {
     Julios,
     Japa,
     Gauss,
-}
-
-pub type Chan<T> = (Sender<T>, Receiver<T>);
-
-pub trait Connection : Default {
-    fn connect(&mut self) -> Chan<PacketCharInfo>;
-    fn close(&mut self);
 }
 
 #[derive(Default, Debug)]
@@ -125,7 +118,7 @@ impl GameState {
         self.list_chars.iter_mut().find(fn_find)
     }
 
-    pub fn update_local_char(&mut self, chan: &Chan<PacketCharInfo>) {
+    pub fn update_local_char(&mut self, client: &Client<PacketCharInfo>) {
         let ambient = self.ambient.as_ref().unwrap();
 
         let state_data = (
@@ -137,11 +130,10 @@ impl GameState {
             ambient.model
         );
 
-        let (opchar, opmap) = (self.opchar.unwrap_or(OpcaoChar::James), self.opmap);
         let local_char = self.get_localchar_mut().expect("Cannot find local char.");
 
         if local_char.update_local(state_data) {
-            local_char.send(opchar, opmap, chan);
+            local_char.send(client);
         }
     }
 
@@ -149,15 +141,15 @@ impl GameState {
         let fn_find = |v: &&mut Char| v.obj.id == char_info.idchar as i32;
         match self.list_chars.iter_mut().find(fn_find) {
             Some(c) => {
-                if c.dead || char_info.idchar < 4 {
-                    let new_char = Char::load(char_info.idchar as i32);
+                if c.dead && char_info.numchar <= 4 {
+                    let new_char = Char::load(char_info.numchar as i32);
                     *c = new_char;
                 }
 
                 c.update(char_info);
             },
             None => {
-                let new_char = Char::load(char_info.idchar as i32);
+                let new_char = Char::load(char_info.numchar as i32);
                 self.list_chars.push(new_char);
             }
         }
@@ -175,6 +167,7 @@ impl GameState {
 
             local_char.obj.x = gate_info.0 as f32;
             local_char.obj.y = gate_info.1 as f32;
+            local_char.idmap = gate_info.2;
 
             let new_ambient = Scene::load(gate_info.2, self.width, self.height);
             self.ambient = Some(new_ambient);
@@ -797,7 +790,7 @@ impl Char {
         let char_path = chars_config_file.get_string(&id.to_string()).expect("Char não encontrado.");
         let config_file = ConfigFile::load(char_path);
 
-        let obj = Object::from_config(&config_file, 1);
+        let obj = Object::from_config(&config_file, id);
         let info = InfoChar::from_config(&config_file);
         let acoes = Action::from_config(&config_file);
 
@@ -817,7 +810,7 @@ impl Char {
             GDPDOWN => self.obj.y += 1.0,
             GDPLEFT => self.obj.x -= 1.0,
             GDPRIGHT => self.obj.x += 1.0,
-            other => panic!("invalid PacketCharInfo.dhit value {}", other)
+            _ => ()
         }
 
         if !char_info.exit {
@@ -969,9 +962,9 @@ impl Char {
         old != (self.obj.d, self.obj.d2, self.obj.a, self.obj.a2)
     }
 
-    pub fn send(&self, opchar: OpcaoChar, opmap: i32, chan: &Chan<PacketCharInfo>) {
+    pub fn send(&self, client: &Client<PacketCharInfo>) {
         let mut char_info = PacketCharInfo {
-            numchar:        opchar as i16,
+            numchar:        self.obj.r#type as i16,
             idchar:         self.obj.id as i16,
             a:              self.obj.a as i16,
             d:              self.obj.d as i16,
@@ -983,7 +976,7 @@ impl Char {
             stamina:        self.info.stamina as i16,
             damage:         self.act[self.obj.a as usize].damage as i16,
             exit:           false,
-            idmap:          opmap as i16,
+            idmap:          self.idmap as i16,
             totlifeless:    0i16,
             listlifeless:   Default::default(),
 
@@ -1007,7 +1000,7 @@ impl Char {
             }
         }
         
-        chan.0.send(char_info).unwrap();
+        client.send(char_info);
     }
 
     pub fn draw(&mut self) {
@@ -1226,7 +1219,7 @@ impl Scene {
         let info = Info::from_config(width);
         let gates = Gate::from_config(&config_file);
 
-        al_play_sample(sound, VOLUME * 1.0, 0.0, 1.0, AlPlaymode::ALLEGRO_PLAYMODE_LOOP, ptr::null_mut());
+        al_play_sample_b(sound, VOLUME * 1.0, 0.0, 1.0, AlPlaymode::ALLEGRO_PLAYMODE_LOOP, ptr::null_mut());
 
         Scene {
             ex: 0,
