@@ -70,15 +70,16 @@ impl Ambients {
         let mut enemies = Vec::with_capacity(qt_inimigos);
 
         for i in 1..=qt_inimigos {
+            let numchar = config_file.get(&format!("{}_num", i)).expect("num not found");
             enemies.push(PacketCharInfo {
                 x: config_file.get(&format!("{}_x", i)).expect("x not found"),
                 y: config_file.get(&format!("{}_y", i)).expect("y not found"),
                 a: config_file.get(&format!("{}_a", i)).expect("a not found"),
                 d: config_file.get(&format!("{}_d", i)).expect("d not found"),
-                numchar: config_file.get(&format!("{}_num", i)).expect("num not found"),
-                vision: enemies_config_file.get(&format!("{}vision", i)).unwrap_or(0),
-                step: enemies_config_file.get(&format!("{}step", i)).unwrap_or(0),
-                damage: enemies_config_file.get(&format!("{}damage", i)).unwrap_or(0),
+                numchar: numchar,
+                vision: enemies_config_file.get(&format!("{}vision", numchar)).unwrap_or(0),
+                step: enemies_config_file.get(&format!("{}step", numchar)).unwrap_or(0),
+                damage: enemies_config_file.get(&format!("{}damage", numchar)).unwrap_or(0),
                 idchar: i as i16,
                 exit: false,
                 healt: config_file.get(&format!("{}_helt", i)).expect("helt not found"),
@@ -102,36 +103,49 @@ impl Ambients {
             server.send(Message::Direct(enemy.clone(), addr));
         }
     }
-
-    fn broadcast_enemies(&mut self, server: &Server<PacketCharInfo>) {
-        let len_enemies = self.enemies.len();
-
-        for enemy in self.enemies.iter_mut() {
-            enemy.totchar = self.clients.len() as i16;
-            enemy.totenemies = len_enemies as i16;
-            server.send(Message::Broadcast(enemy.clone()));
-        }
-    }
 }
 
-fn hit(packet: &mut PacketCharInfo, tx: i16, ty: i16, td: i16, damage: i16) {
+fn hit(packet: &mut PacketCharInfo, tx: i16, ty: i16, td: i16, damage: i16, ambient_data: (i16, i16, *const AlBitmap)) -> bool {
+    const DISPLACEMENT: i16 = 3;
+
     let (x1, y1, x2, y2) = (packet.x, packet.y, packet.x + packet.w, packet.y + packet.h);
 
     if (x1..=x2).contains(&tx) && (y1..=y2).contains(&ty) {
         packet.healt -= damage;
         packet.dhit = td;
 
-        match td as i32 {
-            GDPUP => packet.y -= 3,
-            GDPDOWN => packet.y += 3,
-            GDPLEFT => packet.x -= 3,
-            GDPRIGHT => packet.y += 3,
-            _ => unreachable!()
+        packet.healt = packet.healt.max(0);
+        packet.exit = packet.healt == 0;
+
+        let mov = match td as i32 {
+                    GDPUP => (0, -DISPLACEMENT),
+                    GDPDOWN => (0, DISPLACEMENT),
+                    GDPLEFT => (-DISPLACEMENT, 0),
+                    GDPRIGHT => (DISPLACEMENT, 0),
+                    _ => unreachable!()
+                };
+
+        println!("id {} d {} mov {:?}", packet.idchar, td, mov);
+
+        if mov.0 != 0 {
+            packet.x += mov.0;
+            if collided(packet, ambient_data) {
+                packet.x -= mov.0;
+            }
+        } else {
+            packet.y += mov.1;
+            if collided(packet, ambient_data) {
+                packet.y -= mov.1;
+            }
         }
+
+        true
+    } else {
+        false
     }
 }
 
-fn disconnect_client(ambients: &mut Ambients, addr: SocketAddr, server: &Server<PacketCharInfo>) {
+fn disconnect_client(ambients: &mut Ambients, addr: SocketAddr, _server: &Server<PacketCharInfo>) {
     let idx = ambients.clients_addrs.iter().position(|a| *a == addr);
 
     if let Some(idx) = idx {
@@ -143,7 +157,7 @@ fn disconnect_client(ambients: &mut Ambients, addr: SocketAddr, server: &Server<
 fn connect_client(ambients: &mut Ambients, addr: SocketAddr, server: &Server<PacketCharInfo>) {
     ambients.last_id += 1;
 
-    let packet = PacketCharInfo {
+    let mut packet = PacketCharInfo {
         idchar: ambients.last_id,
         totchar: (ambients.clients.len() + 1) as i16,
         ..PacketCharInfo::default()
@@ -151,12 +165,17 @@ fn connect_client(ambients: &mut Ambients, addr: SocketAddr, server: &Server<Pac
 
     server.send(Message::Direct(packet.clone(), addr));
     ambients.clients_addrs.push(addr);
+
+    packet.x = -1;
+    packet.y = -1;
+
     ambients.clients.push(packet);
     ambients.send_direct_enemies(server, addr);
 }
 
-fn on_message(ambients: &mut Ambients, packet: PacketCharInfo, addr: SocketAddr, server: &Server<PacketCharInfo>) {
+fn on_message(ambients: &mut Ambients, packet: PacketCharInfo, _addr: SocketAddr, server: &Server<PacketCharInfo>) {
     let len_clients = ambients.clients.len();
+    let ambient_data = (ambients.width, ambients.height, ambients.models[packet.idmap as usize]);
 
     let pos_char = ambients.clients.iter().position(|c| c.idchar == packet.idchar).expect("idchar not found - not connected.");
     
@@ -165,23 +184,32 @@ fn on_message(ambients: &mut Ambients, packet: PacketCharInfo, addr: SocketAddr,
     ambients.clients_addrs.swap(0, pos_char);
 
     // split the list 
-    let (this_char, others_chars) = ambients.clients.split_first_mut().unwrap();
+    let (this_char, _) = ambients.clients.split_first_mut().unwrap();
 
-    println!("Char {} went from map {} to {}", this_char.idchar, packet.idmap, this_char.idmap);
-    
     this_char.totchar = len_clients as i16;
     this_char.totenemies = ambients.enemies.len() as i16;
     this_char.idmap = packet.idmap;
 
     if this_char.healt == 0 {
         this_char.healt = packet.healt;
-        this_char.x = packet.x;
-        this_char.y = packet.y;
         this_char.numchar = packet.numchar;
     }
 
-    damage_char(this_char, others_chars);
-    damage_char(this_char, ambients.enemies.as_mut_slice());
+    if this_char.x == -1 && this_char.y == -1 {
+        this_char.x = packet.x;
+        this_char.y = packet.y;
+    }
+
+    this_char.w = packet.w;
+    this_char.h = packet.h;
+    this_char.d = packet.d;
+    this_char.a = packet.a;
+    this_char.dhit = packet.dhit;
+    this_char.damage = packet.damage;
+    this_char.step = packet.step;
+
+    //damage_char(this_char, others_chars, ambient_data);
+    damage_char(this_char, ambients.enemies.as_mut_slice(), ambient_data, server);
 
     let mut lifeless_char = PacketCharInfo::default();
 
@@ -194,38 +222,47 @@ fn on_message(ambients: &mut Ambients, packet: PacketCharInfo, addr: SocketAddr,
             lifeless_char.d = lifeless.d;
             lifeless_char.damage = lifeless.damage;
 
-            damage_char(&lifeless_char, others_chars);
-            damage_char(&lifeless_char, ambients.enemies.as_mut_slice());        
+            //damage_char(&lifeless_char, others_chars, ambient_data, server);
+            damage_char(&lifeless_char, ambients.enemies.as_mut_slice(), ambient_data, server);        
         }
     }
 
     this_char.healt = this_char.healt.max(0);
-    
+
     server.send(Message::Broadcast(this_char.clone()));
 }
 
-fn dir_damage(this_char: &PacketCharInfo, other_char: &mut PacketCharInfo) {
-    if rand::random::<i16>() % 10 + 1 < 5 {
-        return;
-    }
+fn dir_damage_chance(this_char: &PacketCharInfo, other_char: &mut PacketCharInfo, odds: f32, ambient_data: (i16, i16, *const AlBitmap)) -> bool {
+    let res = 
+        if rand::random::<f32>() <= odds {
+            dir_damage(this_char, other_char, ambient_data)
+        } else {
+            false
+        };
 
+    res
+}
+
+fn dir_damage(this_char: &PacketCharInfo, other_char: &mut PacketCharInfo, ambient_data: (i16, i16, *const AlBitmap)) -> bool {
     let (x1, y1, x2, y2) = (this_char.x, this_char.y, this_char.x + this_char.w, this_char.y + this_char.h);
     let (xm, ym) = ((x1+x2)/2, (y1+y2)/2);
 
     match this_char.d as i32 {
-        GDPUP => hit(other_char, xm, y1, this_char.d, this_char.damage),
-        GDPDOWN => hit(other_char, xm, y2, this_char.d, this_char.damage),
-        GDPLEFT => hit(other_char, x1, ym, this_char.d, this_char.damage),
-        GDPRIGHT => hit(other_char, x2, ym, this_char.d, this_char.damage),
+        GDPUP => hit(other_char, xm, y1, this_char.d, this_char.damage, ambient_data),
+        GDPDOWN => hit(other_char, xm, y2, this_char.d, this_char.damage, ambient_data),
+        GDPLEFT => hit(other_char, x1, ym, this_char.d, this_char.damage, ambient_data),
+        GDPRIGHT => hit(other_char, x2, ym, this_char.d, this_char.damage, ambient_data),
         _ => unreachable!()
     }
 }
 
-fn damage_char(this_char: &PacketCharInfo, others_chars: &mut [PacketCharInfo]) {
+fn damage_char(this_char: &PacketCharInfo, others_chars: &mut [PacketCharInfo], ambient_data: (i16, i16, *const AlBitmap), server: &Server<PacketCharInfo>) {
     if this_char.damage > 0 {
         for other in others_chars {
             if this_char.idmap == other.idmap {
-                dir_damage(this_char, other);
+                if dir_damage_chance(this_char, other, 1.0, ambient_data) {
+                    server.send(Message::Broadcast(other.clone()));
+                }
             }
         }
     }
@@ -243,7 +280,132 @@ fn recv_once(ambients: &mut Ambients, server: &Server<PacketCharInfo>) {
 }
 
 fn distance(u: &PacketCharInfo, v: &PacketCharInfo) -> f32 {
-    ((u.x - v.x) as f32).hypot((u.y - v.y) as f32)
+    let uc = (u.x as f32 + u.w as f32 / 2.0, u.y as f32 + u.h as f32 / 2.0);
+    let vc = (v.x  as f32 + v.w as f32 / 2.0, v.y as f32 + v.h as f32 / 2.0);
+
+    (uc.0 - vc.0).hypot(uc.1 - vc.1)
+}
+
+fn move_enemy(enemy: &mut PacketCharInfo, client: &PacketCharInfo, ambient_data: (i16, i16, *const AlBitmap)) {
+    let dx = (client.x + client.w) as f32/2.0 - (enemy.x + enemy.w) as f32/2.0;
+    let dy = (client.y + client.h) as f32/2.0 - (enemy.y + enemy.h) as f32/2.0;
+
+    //println!("client ({}): {}, {}; enemy ({}): {}, {}", client.idchar, client.x, client.y, enemy.idchar, enemy.x, enemy.y);
+
+    let theta = (dy/dx).atan();
+    let theta =
+        match (dx, dy) {
+            (x, y) if x >= 0.0 && y >= 0.0 => theta,
+            (x, _) if x < 0.0 => std::f32::consts::PI + theta,
+            (x, y) if x >= 0.0 && y < 0.0 => 2.0 * std::f32::consts::PI + theta,
+            _ => unreachable!(),
+        }.sin_cos();
+
+    let (mov_x, mov_y) = ((enemy.step as f32 * theta.1), (enemy.step as f32 * theta.0));
+
+    let final_d = if mov_x.abs() > mov_y.abs() {
+        if mov_x >= 0.0 { GDPRIGHT } else { GDPLEFT }
+    } else {
+        if mov_y >= 0.0 { GDPDOWN } else { GDPUP }
+    } as i16;
+
+    let (mov_x, mov_y) = (mov_x.round() as i16, mov_y.round() as i16);
+
+    enemy.x += mov_x;
+    enemy.d = if mov_x >= 0 {
+                GDPRIGHT
+            } else {
+                GDPLEFT
+            } as i16;
+
+    if collided(enemy, ambient_data) {
+        enemy.x -= mov_x;
+    }
+
+    enemy.y += mov_y;
+    enemy.d = if mov_y >= 0 {
+                GDPDOWN
+            } else {
+                GDPUP
+            } as i16;
+
+    if collided(enemy, ambient_data) {
+        enemy.y -= mov_y;
+    }
+
+    enemy.d = final_d;
+}
+
+fn move_boss(boss: &mut PacketCharInfo, client: &PacketCharInfo, lock: &mut i32) -> bool {
+    let mut should_send = true;
+
+    let dx = ((boss.x - client.x) as f32).abs() as i16;
+    let dy = ((boss.y - client.y) as f32).abs() as i16;
+
+    if dx < boss.step + boss.w && boss.x < client.x ||
+        dy < boss.step + boss.h && boss.y < client.y {
+        
+        if *lock > 0 {
+            *lock -= 1;
+            should_send = false;
+        } else {
+            *lock = 20;
+            boss.a = 3;
+
+            if dx >= dy {
+                if boss.x < client.x {
+                    boss.d = GDPRIGHT as i16;
+                } else {
+                    boss.d = GDPLEFT as i16;
+                }
+            } else {
+                if boss.y < client.y {
+                    boss.d = GDPDOWN as i16;
+                } else {
+                    boss.d = GDPUP as i16;
+                }
+            }
+        }
+    } else {
+        if *lock > 0 {
+            *lock -= 1;
+            should_send = false;
+        } else {
+            *lock = 20;
+            boss.a = 3;
+
+            if dx >= dy {
+                if boss.x < client.x {
+                    boss.x += boss.step;
+                    boss.d = GDPRIGHT as i16;
+                } else {
+                    boss.x -= boss.step;
+                    boss.d = GDPLEFT as i16;
+                }
+            } else {
+                if boss.y < client.y {
+                    boss.y += boss.step;
+                    boss.d = GDPDOWN as i16;
+                } else {
+                    boss.y -= boss.step;
+                    boss.d = GDPUP as i16;
+                }
+            }
+        }
+    }
+
+    should_send
+}
+
+fn intersected(p1: &PacketCharInfo, p2: &PacketCharInfo) -> bool {
+    let p1_x2 = p1.x + p1.w;
+    let p1_y2 = p1.y + p1.h;
+
+    let p2_x2 = p2.x + p2.w;
+    let p2_y2 = p2.y + p2.h;
+
+    // p1.x --- p2.x --- p1.x2 --- p2.x2
+    p1.x <= p2_x2 && p2.x <= p1_x2 && p1.y <= p2_y2 && p2.y <= p1_y2
 }
 
 fn game_loop(ambients: &mut Ambients, server: &Server<PacketCharInfo>) {
@@ -251,183 +413,44 @@ fn game_loop(ambients: &mut Ambients, server: &Server<PacketCharInfo>) {
     let (width, height) = (ambients.width, ambients.height);
     
     loop {
-        // remove dead enemies
-        ambients.enemies.retain(|e| !e.exit);
-
         let len_chars = ambients.clients.len() as i16;
         let len_enemies = ambients.enemies.len() as i16;
 
-        // update dead enemies' info
         for enemy in ambients.enemies.iter_mut() {
             let mut should_send = true;
             let ambient_data = (width, height, ambients.models[(enemy.idmap-1) as usize]);
 
             if enemy.healt <= 0 {
+                // update dead enemies' info
                 enemy.exit = true;
             } else {
                 // detect nearest char to attack
                 let nearest_client = ambients
                                         .clients
                                         .iter_mut()
-                                        .filter(|c| c.idmap == enemy.idmap)
+                                        .filter(|c| c.idmap == enemy.idmap && !c.exit)
                                         .map(|c| {
                                             let dist = distance(c, enemy);
                                             (c, dist)
                                         })
                                         .max_by(|c1, c2| c1.1.partial_cmp(&c2.1).unwrap());
-                
+
                 if let Some((client, dist)) = nearest_client {
                     if dist <= enemy.vision as f32 {
                         enemy.a = 1;
 
-                        let dx = ((client.x - enemy.x) as f32).abs() as i16;
-                        let dy = ((client.y - enemy.y) as f32).abs() as i16;
-
                         // check if this enemy hit this client
-                        let x2 = enemy.x + enemy.w;
-                        let y2 = enemy.y + enemy.h;
-
-                        let c_x2 = client.x + client.w;
-                        let c_y2 = client.y + client.h;
-
-                        if enemy.x <= c_x2 && client.x <= x2 &&
-                            enemy.y <= c_y2 && client.y <= y2 {
-                            dir_damage(enemy, client);
+                        if intersected(enemy, client) {
+                            if dir_damage_chance(enemy, client, 0.5, ambient_data) {
+                                server.send(Message::Broadcast(client.clone()));
+                            }
                         }
 
                         // boss moves differently
                         if enemy.numchar == ambients.boss_num {
-                            if dx < enemy.step + enemy.w && enemy.x < client.x ||
-                                dy < enemy.step + enemy.h && enemy.y < client.y {
-                                
-                                if lock > 0 {
-                                    lock -= 1;
-                                    should_send = false;
-                                } else {
-                                    lock = 20;
-                                    enemy.a = 3;
-
-                                    if dx >= dy {
-                                        if enemy.x < client.x {
-                                            enemy.d = GDPRIGHT as i16;
-                                        } else {
-                                            enemy.d = GDPLEFT as i16;
-                                        }
-                                    } else {
-                                        if enemy.y < client.y {
-                                            enemy.d = GDPDOWN as i16;
-                                        } else {
-                                            enemy.d = GDPUP as i16;
-                                        }
-                                    }
-                                }
-                            } else {
-                                if lock > 0 {
-                                    lock -= 1;
-                                    should_send = false;
-                                } else {
-                                    lock = 20;
-                                    enemy.a = 3;
-
-                                    if dx >= dy {
-                                        if enemy.x < client.x {
-                                            enemy.x += enemy.step;
-                                            enemy.d = GDPRIGHT as i16;
-                                        } else {
-                                            enemy.x -= enemy.step;
-                                            enemy.d = GDPLEFT as i16;
-                                        }
-                                    } else {
-                                        if enemy.y < client.y {
-                                            enemy.y += enemy.step;
-                                            enemy.d = GDPDOWN as i16;
-                                        } else {
-                                            enemy.y -= enemy.step;
-                                            enemy.d = GDPUP as i16;
-                                        }
-                                    }
-                                }
-                            }
+                            should_send = move_boss(enemy, client, &mut lock);
                         } else {
-                            // checks move over x-axis
-                            if enemy.x < client.x {
-                                enemy.x += enemy.step;
-                                enemy.d = GDPRIGHT as i16;
-
-                                if enemy_collided(enemy, ambient_data) {
-                                    enemy.x -= enemy.step-1;
-                                }
-
-                                if dx > dy {
-                                    enemy.d = GDPLEFT as i16;
-                                } else {
-                                    if enemy.y < client.y {
-                                        enemy.d = GDPDOWN as i16;
-                                    } else {
-                                        enemy.d = GDPUP as i16;
-                                    }
-                                }
-                            } else {
-                                if dx > enemy.step * 2 {
-                                    enemy.x -= enemy.step;
-                                }
-                                
-                                enemy.d = GDPLEFT as i16;
-
-                                if enemy_collided(enemy, ambient_data) {
-                                    enemy.x += enemy.step * 2;
-                                }
-
-                                if dx > dy {
-                                    enemy.d = GDPLEFT as i16;
-                                } else {
-                                    if enemy.y < client.y {
-                                        enemy.d = GDPDOWN as i16;
-                                    } else {
-                                        enemy.d = GDPUP as i16;
-                                    }
-                                }
-                            }
-
-                            // checks move over y-axis
-                            if enemy.y < client.y {
-                                enemy.y += enemy.step;
-                                enemy.d = GDPDOWN as i16;
-
-                                if enemy_collided(enemy, ambient_data) {
-                                    enemy.y -= enemy.step * 2;
-                                }
-        
-                                if dy > dx {
-                                    enemy.d = GDPDOWN as i16;
-                                } else {
-                                    if enemy.x < client.x {
-                                        enemy.d = GDPRIGHT as i16;
-                                    } else {
-                                        enemy.d = GDPLEFT as i16;
-                                    }
-                                }
-                            } else {
-                                if dy > enemy.step * 2 {
-                                    enemy.y -= enemy.step;
-                                }
-        
-                                enemy.d = GDPUP as i16;
-
-                                if enemy_collided(enemy, ambient_data) {
-                                    enemy.y += enemy.step * 2;
-                                }
-        
-                                if dy > dx {
-                                    enemy.d = GDPUP as i16;
-                                } else {
-                                    if enemy.x < client.x {
-                                        enemy.d = GDPRIGHT as i16;
-                                    } else {
-                                        enemy.d = GDPLEFT as i16;
-                                    }
-                                }
-                            }
+                            move_enemy(enemy, client, ambient_data);
                         }
                     } else {
                         enemy.a = 0;
@@ -444,14 +467,32 @@ fn game_loop(ambients: &mut Ambients, server: &Server<PacketCharInfo>) {
             }
         }
 
-        recv_once(ambients, server);
-
-        thread::sleep(Duration::from_millis(80));
+        for _ in 0..5 {
+            recv_once(ambients, server);
+            move_chars(ambients, server);
+            thread::sleep(Duration::from_millis(16));
+        }
     }
 }
 
-fn enemy_collided(enemy: &PacketCharInfo, ambients_data: (i16, i16, *const AlBitmap)) -> bool {
-    let (width, height, model) = ambients_data;
+fn move_chars(ambients: &mut Ambients, server: &Server<PacketCharInfo>) {
+    for this_char in ambients.clients.iter_mut() {
+        if this_char.a == 1 || this_char.a == 2 {
+            match this_char.d as i32 {
+                GDPLEFT => this_char.x -= this_char.step,
+                GDPRIGHT => this_char.x += this_char.step,
+                GDPUP => this_char.y -= this_char.step,
+                GDPDOWN => this_char.y += this_char.step,
+                _ => unreachable!()
+            }
+
+            server.send(Message::Broadcast(this_char.clone()));
+        }
+    }
+}
+
+fn collided(enemy: &PacketCharInfo, ambient_data: (i16, i16, *const AlBitmap)) -> bool {
+    let (width, height, model) = ambient_data;
 
     if enemy.y < 0 || enemy.x < 0 {
         return true;
@@ -463,11 +504,11 @@ fn enemy_collided(enemy: &PacketCharInfo, ambients_data: (i16, i16, *const AlBit
 
     let colorwall = al_map_rgb(0, 0, 0);
 
-    let sx = al_get_bitmap_width(model) as f32 / width as f32;
-    let sy = al_get_bitmap_height(model) as f32 / height as f32;
+    let we = al_get_bitmap_width(model) as f32;
+    let he = al_get_bitmap_height(model) as f32;
 
-    let we = width as f32 * sx;
-    let he = height as f32 * sy;
+    let sx = we / width as f32;
+    let sy = he / height as f32;
 
     let xup   = (enemy.x + enemy.w) as f32 * sx;
     let yup   = enemy.y as f32 * sy;
@@ -476,18 +517,14 @@ fn enemy_collided(enemy: &PacketCharInfo, ambients_data: (i16, i16, *const AlBit
     let ydown = (enemy.y + enemy.h) as f32 * sy;
 
     if xdown >= 0.0 && ydown >= 0.0 && xup <= we && yup <= he {
-        if enemy.d != GDPRIGHT as i16 {
-            let color = al_get_pixel(model, xdown as i32, ydown as i32);
-            if colorwall == color {
-                return true;
-            }
+        let color = al_get_pixel(model, xdown as i32, ydown as i32);
+        if colorwall == color {
+            return true;
         }
 
-        if enemy.d != GDPLEFT as i16 {
-            let color = al_get_pixel(model, xup as i32, ydown as i32);
-            if colorwall == color {
-                return true;
-            }
+        let color = al_get_pixel(model, xup as i32, ydown as i32);
+        if colorwall == color {
+            return true;
         }
     } else {
         return true;
@@ -506,4 +543,42 @@ fn main() {
     let mut ambients = Ambients::load();
     println!("Heredian Server");
     game_loop(&mut ambients, &server);
+}
+
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_distance() {
+        let (mut p1, mut p2) = (PacketCharInfo::default(), PacketCharInfo::default());
+        p1.x = 5;
+        p1.y = 5;
+        p1.w = 1;
+        p1.h = p1.w;
+
+        p2.x = 4;
+        p2.y = 4;
+        p2.w = 1;
+        p2.h = p1.w;
+
+        let dist = distance(&p1, &p2);
+        assert_eq!(dist, 2.0f32.sqrt());
+
+        let dist = distance(&p2, &p1);
+        assert_eq!(dist, 2.0f32.sqrt());
+
+        let dist = distance(&p2, &p2);
+        assert_eq!(dist, 0.0);
+
+        let dist = distance(&p1, &p1);
+        assert_eq!(dist, 0.0);
+    }
+
+    #[test]
+    fn test_dir_damage() {
+        //let (mut p1, mut p2) = (PacketCharInfo::default(), PacketCharInfo::default());
+        //dir_damage(&p1, &mut p2);
+    }
 }

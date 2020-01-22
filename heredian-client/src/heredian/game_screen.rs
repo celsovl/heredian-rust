@@ -188,7 +188,7 @@ impl GameScreen {
 
                 let that_char =
                     if let Some(that_char) = that_char {
-                        // replace if found is dead and not an enemy
+                        // replace if char is dead and not an enemy
                         if that_char.dead && msg.numchar <= 4 {
                             *that_char = Char::load(msg.numchar as i32);
                         }
@@ -202,6 +202,8 @@ impl GameScreen {
                     };
 
                 if that_char.info.healt != msg.healt as i32 {
+                    that_char.info.healt = msg.healt as i32;
+
                     match msg.dhit as i32 {
                         GDPUP => that_char.obj.y -= 1.0,
                         GDPDOWN => that_char.obj.y += 1.0,
@@ -225,6 +227,7 @@ impl GameScreen {
                     }
                 } else {
                     that_char.dead = true;
+                    that_char.obj.a = msg.a as i32;
                 }
             }
         }
@@ -245,7 +248,7 @@ impl GameScreen {
                         continue;
                     }
 
-                    self.recv_once(state);
+                    //self.recv_once(state);
                     self.update(state);
                     self.draw(state);
                 },
@@ -273,11 +276,8 @@ impl GameScreen {
 
         match self.client.as_ref() {
             Some(client) => {
-                loop {
-                    match client.try_recv() {
-                        Ok(char_info) => state.update_char(char_info),
-                        Err(_) => break
-                    }
+                while let Ok(char_info) = client.try_recv() {
+                    state.update_char(char_info);
                 }
 
                 state.update_local_char(client);

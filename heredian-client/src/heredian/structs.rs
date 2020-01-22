@@ -7,7 +7,7 @@ use heredian_lib::allegro_safe::*;
 use heredian_lib::file_manager::ConfigFile;
 use heredian_lib::net::{Client};
 
-pub const VOLUME: f32 = 0.2;
+pub const VOLUME: f32 = 0.005;
 pub const FPS: f64 = 60.0;
 
 #[derive(PartialEq)]
@@ -132,13 +132,15 @@ impl GameState {
 
         let local_char = self.get_localchar_mut().expect("Cannot find local char.");
 
-        if local_char.update_local(state_data) {
-            local_char.send(client);
+        if !local_char.dead {
+            if local_char.update_local(state_data) {
+                local_char.send(client);
+            }
         }
     }
 
     pub fn update_char(&mut self, char_info: PacketCharInfo) {
-        let fn_find = |v: &&mut Char| v.obj.id == char_info.idchar as i32;
+        let fn_find = |v: &&mut Char| v.obj.idchar == char_info.idchar as i32;
         match self.list_chars.iter_mut().find(fn_find) {
             Some(c) => {
                 if c.dead && char_info.numchar <= 4 {
@@ -146,10 +148,11 @@ impl GameState {
                     *c = new_char;
                 }
 
-                c.update(char_info);
+                c.update(char_info, self.local_char_id);
             },
             None => {
-                let new_char = Char::load(char_info.numchar as i32);
+                let mut new_char = Char::load(char_info.numchar as i32);
+                new_char.update(char_info, self.local_char_id);
                 self.list_chars.push(new_char);
             }
         }
@@ -218,8 +221,8 @@ pub struct Action {
     pub lock: bool,
     pub lifelessid: Option<i32>,
     pub charge: Option<i32>,
-    pub rebatex: Option<i32>,
-    pub rebatey: Option<i32>,
+    pub rebatex: i32,
+    pub rebatey: i32,
 }
 
 impl Drop for Action {
@@ -545,8 +548,8 @@ impl Action {
             stepy: action_config_file.get("stepy").expect("stepy não encontrado."),
             fps: fps,
             lifelessid: action_config_file.get::<i32>("lifelessid").and_then(|v| if v > 0 { Some(v) } else { None } ),
-            rebatex: action_config_file.get("rebatex"),
-            rebatey: action_config_file.get("rebatey"),
+            rebatex: action_config_file.get("rebatex").unwrap_or(0),
+            rebatey: action_config_file.get("rebatey").unwrap_or(0),
             fila_timer: fila_timer,
 
             sound: sound,
@@ -804,29 +807,27 @@ impl Char {
         }
     }
 
-    pub fn update(&mut self, char_info: PacketCharInfo) {
-        match char_info.dhit as i32 {
-            GDPUP => self.obj.y -= 1.0,
-            GDPDOWN => self.obj.y += 1.0,
-            GDPLEFT => self.obj.x -= 1.0,
-            GDPRIGHT => self.obj.x += 1.0,
-            _ => ()
-        }
+    pub fn update(&mut self, char_info: PacketCharInfo, local_char_id: usize) {
+        self.info.healt = char_info.healt as i32;
 
         if !char_info.exit {
-            if self.obj.a != 4 {
-                self.dead          = false;
-                self.obj.id        = char_info.idchar as i32;
-                self.obj.idchar    = char_info.idchar as i32;
-                self.obj.a         = char_info.a as i32;
-                self.obj.d         = char_info.d as i32;
-                self.obj.x         = char_info.x as f32;
-                self.obj.y         = char_info.y as f32;
-                self.info.stamina  = char_info.stamina as i32;
-                self.idmap         = char_info.idmap as i32;
+            self.dead = false;
+            self.obj.id = char_info.idchar as i32;
+            self.obj.idchar = char_info.idchar as i32;
+            self.obj.a = char_info.a as i32;
+            self.obj.d = char_info.d as i32;
+            self.obj.x = char_info.x as f32;
+            self.obj.y = char_info.y as f32;
+            
+            if self.obj.idchar != local_char_id as i32 {
+                self.info.stamina = char_info.stamina as i32;
+                self.idmap = char_info.idmap as i32;
+            } else {
+                //println!("old-y {}, new-y {}", self.obj.y, char_info.y);
             }
         } else {
             self.dead = true;
+            self.obj.a = char_info.a as i32;
         }
     }
 
@@ -834,7 +835,7 @@ impl Char {
         let mut kb_state = AlKeyboardState::default();
         al_get_keyboard_state(&mut kb_state);
 
-        let old = (self.obj.d, self.obj.d2, self.obj.a, self.obj.a2);
+        let old = (self.obj.d, self.obj.d2, self.obj.a, self.obj.a2, self.obj.x, self.obj.y, self.obj.wd, self.obj.hd);
 
         self.obj.d2 = 0;
 
@@ -907,21 +908,42 @@ impl Char {
             }
         }
 
+        let mut mov_y = 0.0;
+        let mut mov_x = 0.0;
+        
         if self.obj.d2 & GDPUP != 0 {
-            self.obj.y -= act.stepy as f32;
+            mov_y = -act.stepy as f32;
         }
 
         if self.obj.d2 & GDPDOWN != 0 {
-            self.obj.y += act.stepy as f32;
+            mov_y = act.stepy as f32;
         }
 
         if self.obj.d2 & GDPLEFT != 0 {
-            self.obj.x -= act.stepx as f32;
+            mov_x = -act.stepx as f32;
         }
 
         if self.obj.d2 & GDPRIGHT != 0 {
-            self.obj.x += act.stepx as f32;
+            mov_x = act.stepx as f32;
         }
+
+        /*
+        if mov_y != 0.0 {
+            self.obj.y += mov_y;
+            // move back if collided
+            if self.collided(state_data) {
+                self.obj.y -= mov_y;
+            }
+        }
+
+        if mov_x != 0.0 {
+            self.obj.x += mov_x;
+            // move back if collided
+            if self.collided(state_data) {
+                self.obj.x -= mov_x;
+            }
+        }
+        */
 
         if self.info.stamina <= 0 {
             self.obj.a = 0;
@@ -940,26 +962,7 @@ impl Char {
         // clear lifeless dead
         self.list_lifeless.retain(|l| !l.dead);
 
-        // move back if collided
-        if self.collided(state_data) {
-            if self.obj.d2 & GDPUP != 0 {
-                self.obj.y += act.stepy as f32;
-            }
-
-            if self.obj.d2 & GDPDOWN != 0 {
-                self.obj.y -= act.stepy as f32;
-            }
-
-            if self.obj.d2 & GDPLEFT != 0 {
-                self.obj.x += act.stepx as f32;
-            }
-
-            if self.obj.d2 & GDPRIGHT != 0 {
-                self.obj.x -= act.stepx as f32;
-            }
-        }
-
-        old != (self.obj.d, self.obj.d2, self.obj.a, self.obj.a2)
+        old != (self.obj.d, self.obj.d2, self.obj.a, self.obj.a2, self.obj.x, self.obj.y, self.obj.wd, self.obj.hd)
     }
 
     pub fn send(&self, client: &Client<PacketCharInfo>) {
@@ -968,20 +971,20 @@ impl Char {
             idchar:         self.obj.id as i16,
             a:              self.obj.a as i16,
             d:              self.obj.d as i16,
-            x:              (self.obj.x as i32  + self.act[self.obj.a as usize].rebatex.unwrap_or(0)) as i16,
-            w:              (self.obj.wd as i32 - self.act[self.obj.a as usize].rebatex.unwrap_or(0)) as i16,
-            y:              (self.obj.y as i32  + self.act[self.obj.a as usize].rebatey.unwrap_or(0)) as i16,
-            h:              (self.obj.hd as i32 - self.act[self.obj.a as usize].rebatey.unwrap_or(0)) as i16,
+            x:              (self.obj.x as i32  + self.act[self.obj.a as usize].rebatex) as i16,
+            w:              (self.obj.wd as i32 - self.act[self.obj.a as usize].rebatex) as i16,
+            y:              (self.obj.y as i32  + self.act[self.obj.a as usize].rebatey) as i16,
+            h:              (self.obj.hd as i32 - self.act[self.obj.a as usize].rebatey) as i16,
             healt:          self.info.healt as i16,
             stamina:        self.info.stamina as i16,
             damage:         self.act[self.obj.a as usize].damage as i16,
-            exit:           false,
+            exit:           self.dead,
             idmap:          self.idmap as i16,
             totlifeless:    0i16,
             listlifeless:   Default::default(),
 
             dhit: 0i16,
-            step: 0i16,
+            step: self.act[self.obj.a as usize].stepx as i16,
             totchar: 0i16,
             totenemies: 0i16,
             vision: 0i16,
@@ -1025,47 +1028,46 @@ impl Char {
             self.obj.lock = true;
         }
 
-        let sprite_size = (sprite.rect.2 - sprite.rect.0, sprite.rect.3 - sprite.rect.1);
+        // updates width and height based on current sprite
+        self.obj.wd = self.obj.w * sprite.w as f32;
+        self.obj.hd = self.obj.h * sprite.h as f32;
 
-        // adjust object width / height
-        self.obj.wd = self.obj.w * (sprite.rect.2 - sprite.rect.0) as f32;
-        self.obj.hd = self.obj.h * (sprite.rect.3 - sprite.rect.1) as f32;
-        
         //gdp_movsprite(&tchar->obj,&oactions[acao]);
 
         let frame = al_create_sub_bitmap(
             self.act[a].image,
-            sprite.w*sprite.ix + sprite.rect.0,
-            sprite.h*sprite.iy + sprite.rect.1,
-            sprite_size.0,
-            sprite_size.1);
+            sprite.w*sprite.ix,
+            sprite.h*sprite.iy,
+            sprite.w,
+            sprite.h);
 
         // desenha o sprite
         al_draw_scaled_bitmap(
             frame,
             0.0,
             0.0,
-            sprite_size.0 as f32,
-            sprite_size.1 as f32,
+            sprite.w as f32,
+            sprite.h as f32,
             self.obj.x,
             self.obj.y,
             self.obj.wd,
             self.obj.hd,
             0);
 
+        let xup   = self.obj.x + self.obj.wd - self.act[a].rebatex as f32;
+        let yup   = self.obj.y + self.act[a].rebatey as f32;
+
+        let xdown = self.obj.x + self.act[a].rebatex as f32;
+        let ydown = self.obj.y + self.obj.hd - self.act[a].rebatey as f32;
+    
         // draw green bounding box
         al_draw_rectangle(
-            self.obj.x, 
-            self.obj.y, 
-            self.obj.x + self.obj.wd, 
-            self.obj.y + self.obj.hd, 
+            xup, 
+            yup, 
+            xdown, 
+            ydown, 
             al_map_rgb(0,255,0), 
             1.0);
-
-        let (xdown, ydown, xup) = (
-            self.obj.x,
-            (self.obj.y + self.obj.hd),
-            (self.obj.x + self.obj.wd));
 
         al_draw_circle(xdown, ydown, 2.0, al_map_rgb(0, 0, 255), 1.0);
         al_draw_circle(xup, ydown, 2.0, al_map_rgb(0, 0, 255), 1.0);
@@ -1159,6 +1161,9 @@ impl Char {
             return true;
         }
 
+        let act = &self.act[self.obj.a as usize];
+        let (rebatex, rebatey) = (act.rebatex as f32, act.rebatey as f32);
+
         let colorwall = al_map_rgb(0, 0, 0);
 
         let sx = amb_w as f32 / amb_wd as f32;
@@ -1167,25 +1172,21 @@ impl Char {
         let we = amb_wd as f32 * sx;
         let he = amb_hd as f32 * sy;
 
-        let xup   = (self.obj.x + self.obj.wd) * sx;
-        let yup   = self.obj.y * sy;
+        let xup   = (self.obj.x + self.obj.wd - rebatex) * sx;
+        let yup   = (self.obj.y + rebatey) * sy;
 
-        let xdown = self.obj.x * sx;
-        let ydown = (self.obj.y + self.obj.hd) * sy;
+        let xdown = (self.obj.x + rebatex) * sx;
+        let ydown = (self.obj.y + self.obj.hd - rebatey) * sy;
 
         if xdown >= 0.0 && ydown >= 0.0 && xup <= we && yup <= he {
-            if self.obj.d != GDPRIGHT {
-                let color = al_get_pixel(amb_model, xdown as i32, ydown as i32);
-                if colorwall == color {
-                    return true;
-                }
+            let color = al_get_pixel(amb_model, xdown as i32, ydown as i32);
+            if colorwall == color {
+                return true;
             }
 
-            if self.obj.d != GDPLEFT {
-                let color = al_get_pixel(amb_model, xup as i32, ydown as i32);
-                if colorwall == color {
-                    return true;
-                }
+            let color = al_get_pixel(amb_model, xup as i32, ydown as i32);
+            if colorwall == color {
+                return true;
             }
         } else {
             return true;
