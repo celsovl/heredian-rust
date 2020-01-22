@@ -118,7 +118,7 @@ impl GameState {
         self.list_chars.iter_mut().find(fn_find)
     }
 
-    pub fn update_local_char(&mut self, client: &Client<PacketCharInfo>) {
+    pub fn update_local_char(&mut self, client: &Client<PacketCharInfo>) -> bool {
         let ambient = self.ambient.as_ref().unwrap();
 
         let state_data = (
@@ -133,9 +133,9 @@ impl GameState {
         let local_char = self.get_localchar_mut().expect("Cannot find local char.");
 
         if !local_char.dead {
-            if local_char.update_local(state_data) {
-                local_char.send(client);
-            }
+            local_char.update_local(state_data)
+        } else {
+            false
         }
     }
 
@@ -158,7 +158,7 @@ impl GameState {
         }
     }
 
-    pub fn try_change_ambient(&mut self) {
+    pub fn try_change_ambient(&mut self) -> bool {
         let ambient = self.ambient.as_ref().unwrap();
         let local_char = self.get_localchar().unwrap();
 
@@ -174,6 +174,10 @@ impl GameState {
 
             let new_ambient = Scene::load(gate_info.2, self.width, self.height);
             self.ambient = Some(new_ambient);
+
+            true
+        } else {
+            false
         }
     }
 }
@@ -622,10 +626,10 @@ impl Lifeless {
 
     pub fn draw(&mut self) {
         let d = match self.obj.d {
-            GDPLEFT => 1,
-            GDPRIGHT => 2,
-            GDPUP => 3,
-            GDPDOWN => 0,
+            DIRECTION_LEFT => 1,
+            DIRECTION_RIGHT => 2,
+            DIRECTION_UP => 3,
+            DIRECTION_DOWN => 0,
             _ => 2
         };
 
@@ -675,10 +679,10 @@ impl Lifeless {
 
     pub fn update(&mut self, state_data: (i32, i32, i32, i32, i32, *const AlBitmap)) {
         let d = match self.obj.d {
-            GDPLEFT => 1,
-            GDPRIGHT => 2,
-            GDPUP => 3,
-            GDPDOWN => 0,
+            DIRECTION_LEFT => 1,
+            DIRECTION_RIGHT => 2,
+            DIRECTION_UP => 3,
+            DIRECTION_DOWN => 0,
             _ => 2
         };
 
@@ -691,37 +695,37 @@ impl Lifeless {
         self.obj.wd = self.obj.w * sprite.w as f32;
         self.obj.hd = self.obj.h * sprite.h as f32;
 
-        if self.obj.d == GDPUP {
+        if self.obj.d == DIRECTION_UP {
             self.obj.y -= act.stepy as f32;
         }
 
-        if self.obj.d == GDPDOWN {
+        if self.obj.d == DIRECTION_DOWN {
             self.obj.y += act.stepy as f32;
         }
 
-        if self.obj.d == GDPLEFT {
+        if self.obj.d == DIRECTION_LEFT {
             self.obj.x -= act.stepx as f32;
         }
 
-        if self.obj.d == GDPRIGHT {
+        if self.obj.d == DIRECTION_RIGHT {
             self.obj.x += act.stepx as f32;
         }
 
         // move back if collided
         if self.collided(state_data) {
-            if self.obj.d == GDPUP {
+            if self.obj.d == DIRECTION_UP {
                 self.obj.y += act.stepy as f32;
             }
 
-            if self.obj.d == GDPDOWN {
+            if self.obj.d == DIRECTION_DOWN {
                 self.obj.y -= act.stepy as f32;
             }
 
-            if self.obj.d == GDPLEFT {
+            if self.obj.d == DIRECTION_LEFT {
                 self.obj.x += act.stepx as f32;
             }
 
-            if self.obj.d == GDPRIGHT {
+            if self.obj.d == DIRECTION_RIGHT {
                 self.obj.x -= act.stepx as f32;
             }
         }
@@ -764,14 +768,14 @@ impl Lifeless {
         let ydown = (self.obj.y + self.obj.hd) * sy;
 
         if xdown >= 0.0 && ydown >= 0.0 && xup <= we && yup <= he {
-            if self.obj.d != GDPRIGHT {
+            if self.obj.d != DIRECTION_RIGHT {
                 let color = al_get_pixel(amb_model, xdown as i32, ydown as i32);
                 if colorwall == color {
                     return true;
                 }
             }
 
-            if self.obj.d != GDPLEFT {
+            if self.obj.d != DIRECTION_LEFT {
                 let color = al_get_pixel(amb_model, xup as i32, ydown as i32);
                 if colorwall == color {
                     return true;
@@ -816,8 +820,10 @@ impl Char {
             self.obj.idchar = char_info.idchar as i32;
             self.obj.a = char_info.a as i32;
             self.obj.d = char_info.d as i32;
-            self.obj.x = char_info.x as f32;
-            self.obj.y = char_info.y as f32;
+            if self.obj.idchar != local_char_id as i32 || self.idmap == char_info.idmap as i32 {
+                self.obj.x = char_info.x as f32;
+                self.obj.y = char_info.y as f32;
+            }
             
             if self.obj.idchar != local_char_id as i32 {
                 self.info.stamina = char_info.stamina as i32;
@@ -840,23 +846,23 @@ impl Char {
         self.obj.d2 = 0;
 
         if al_key_down(&mut kb_state, ALLEGRO_KEY_UP) {
-            self.obj.d2 |= GDPUP;
-            self.obj.d = GDPUP;
+            self.obj.d2 |= DIRECTION_UP;
+            self.obj.d = DIRECTION_UP;
         }
 
         if al_key_down(&mut kb_state, ALLEGRO_KEY_DOWN) {
-            self.obj.d2 |= GDPDOWN;
-            self.obj.d = GDPDOWN;
+            self.obj.d2 |= DIRECTION_DOWN;
+            self.obj.d = DIRECTION_DOWN;
         }
 
         if al_key_down(&mut kb_state, ALLEGRO_KEY_LEFT) {
-            self.obj.d2 |= GDPLEFT;
-            self.obj.d = GDPLEFT;
+            self.obj.d2 |= DIRECTION_LEFT;
+            self.obj.d = DIRECTION_LEFT;
         }
 
         if al_key_down(&mut kb_state, ALLEGRO_KEY_RIGHT) {
-            self.obj.d2 |= GDPRIGHT;
-            self.obj.d = GDPRIGHT;
+            self.obj.d2 |= DIRECTION_RIGHT;
+            self.obj.d = DIRECTION_RIGHT;
         }
 
         if al_key_down(&mut kb_state, ALLEGRO_KEY_D) {
@@ -872,23 +878,23 @@ impl Char {
         }
 
         if self.obj.a2 & 2 != 0 {
-            self.obj.a = 3;
+            self.obj.a = ACTION_ATTACK;
         } else if self.obj.d2 == 0 {
-            self.obj.a = 0;
+            self.obj.a = ACTION_IDLE;
         } else if self.obj.a2 & 1 != 0 {
-            self.obj.a = 2;
+            self.obj.a = ACTION_RUN;
         } else {
-            self.obj.a = 1;
+            self.obj.a = ACTION_WALK;
         }
 
         let act = &self.act[self.obj.a as usize];
 
         // create magic if needed
         let d = match self.obj.d {
-            GDPLEFT => 1,
-            GDPRIGHT => 2,
-            GDPUP => 3,
-            GDPDOWN => 0,
+            DIRECTION_LEFT => 1,
+            DIRECTION_RIGHT => 2,
+            DIRECTION_UP => 3,
+            DIRECTION_DOWN => 0,
             _ => 2
         };
 
@@ -908,43 +914,6 @@ impl Char {
             }
         }
 
-        let mut mov_y = 0.0;
-        let mut mov_x = 0.0;
-        
-        if self.obj.d2 & GDPUP != 0 {
-            mov_y = -act.stepy as f32;
-        }
-
-        if self.obj.d2 & GDPDOWN != 0 {
-            mov_y = act.stepy as f32;
-        }
-
-        if self.obj.d2 & GDPLEFT != 0 {
-            mov_x = -act.stepx as f32;
-        }
-
-        if self.obj.d2 & GDPRIGHT != 0 {
-            mov_x = act.stepx as f32;
-        }
-
-        /*
-        if mov_y != 0.0 {
-            self.obj.y += mov_y;
-            // move back if collided
-            if self.collided(state_data) {
-                self.obj.y -= mov_y;
-            }
-        }
-
-        if mov_x != 0.0 {
-            self.obj.x += mov_x;
-            // move back if collided
-            if self.collided(state_data) {
-                self.obj.x -= mov_x;
-            }
-        }
-        */
-
         if self.info.stamina <= 0 {
             self.obj.a = 0;
         }
@@ -962,7 +931,9 @@ impl Char {
         // clear lifeless dead
         self.list_lifeless.retain(|l| !l.dead);
 
-        old != (self.obj.d, self.obj.d2, self.obj.a, self.obj.a2, self.obj.x, self.obj.y, self.obj.wd, self.obj.hd)
+        let new = (self.obj.d, self.obj.d2, self.obj.a, self.obj.a2, self.obj.x, self.obj.y, self.obj.wd, self.obj.hd);
+        
+        old != new || self.list_lifeless.len() > 0
     }
 
     pub fn send(&self, client: &Client<PacketCharInfo>) {
@@ -971,6 +942,7 @@ impl Char {
             idchar:         self.obj.id as i16,
             a:              self.obj.a as i16,
             d:              self.obj.d as i16,
+            d2:             self.obj.d2 as i16,
             x:              (self.obj.x as i32  + self.act[self.obj.a as usize].rebatex) as i16,
             w:              (self.obj.wd as i32 - self.act[self.obj.a as usize].rebatex) as i16,
             y:              (self.obj.y as i32  + self.act[self.obj.a as usize].rebatey) as i16,
@@ -1010,10 +982,10 @@ impl Char {
         let a = self.obj.a as usize;
 
         let d = match self.obj.d {
-            GDPLEFT => 1,
-            GDPRIGHT => 2,
-            GDPUP => 3,
-            GDPDOWN => 0,
+            DIRECTION_LEFT => 1,
+            DIRECTION_RIGHT => 2,
+            DIRECTION_UP => 3,
+            DIRECTION_DOWN => 0,
             _ => 2
         };
 
@@ -1054,23 +1026,27 @@ impl Char {
             self.obj.hd,
             0);
 
-        let xup   = self.obj.x + self.obj.wd - self.act[a].rebatex as f32;
-        let yup   = self.obj.y + self.act[a].rebatey as f32;
-
-        let xdown = self.obj.x + self.act[a].rebatex as f32;
-        let ydown = self.obj.y + self.obj.hd - self.act[a].rebatey as f32;
+        const DRAW_BOUNDING_BOX: bool = false;
     
-        // draw green bounding box
-        al_draw_rectangle(
-            xup, 
-            yup, 
-            xdown, 
-            ydown, 
-            al_map_rgb(0,255,0), 
-            1.0);
+        if DRAW_BOUNDING_BOX {
+            let xup   = self.obj.x + self.obj.wd - self.act[a].rebatex as f32;
+            let yup   = self.obj.y + self.act[a].rebatey as f32;
+    
+            let xdown = self.obj.x + self.act[a].rebatex as f32;
+            let ydown = self.obj.y + self.obj.hd - self.act[a].rebatey as f32;
 
-        al_draw_circle(xdown, ydown, 2.0, al_map_rgb(0, 0, 255), 1.0);
-        al_draw_circle(xup, ydown, 2.0, al_map_rgb(0, 0, 255), 1.0);
+            // draw green bounding box
+            al_draw_rectangle(
+                xup, 
+                yup, 
+                xdown, 
+                ydown, 
+                al_map_rgb(0,255,0), 
+                1.0);
+
+            al_draw_circle(xdown, ydown, 2.0, al_map_rgb(0, 0, 255), 1.0);
+            al_draw_circle(xup, ydown, 2.0, al_map_rgb(0, 0, 255), 1.0);
+        }
 
         al_destroy_bitmap(frame);
 
@@ -1078,7 +1054,6 @@ impl Char {
         for lifeless in self.list_lifeless.iter_mut() {
             lifeless.draw();
         }
-
 
         // verifica se deu tempo para troca de sprite
         if !al_is_event_queue_empty(self.act[a].fila_timer) {

@@ -29,7 +29,7 @@ impl<TData> Packet<TData>
             sign: b"GDP".to_owned(),
             size: mem::size_of::<Self>() as u16,
             data: msg
-        }        
+        }
     }
 }
 
@@ -54,7 +54,7 @@ impl<TData> ToBytes for Packet<TData>
         let mut buf = vec![0u8;mem::size_of_val(self)];
         buf[..3].copy_from_slice(&self.sign);
         buf[3..5].copy_from_slice(&self.size.to_le_bytes());
-        buf[5..113].copy_from_slice(&self.data.to_bytes());
+        buf[5..115].copy_from_slice(&self.data.to_bytes());
 
         buf
     }
@@ -291,9 +291,9 @@ impl<TMsg> Server<TMsg>
                 for (stream, client_addr) in clients.iter_mut() {
                     match stream.peek(&mut buf) {
                         Ok(size) if size >= buf.len() => {
-                            stream.read_exact(&mut buf[0..size]).unwrap();
+                            stream.read_exact(&mut buf[..]).unwrap();
     
-                            let packet = Packet::<TMsg>::from_bytes(&buf[0..size].to_owned());
+                            let packet = Packet::<TMsg>::from_bytes(&buf[..]);
                             let msg = Message::Direct(packet.data, *client_addr);
 
                             r_tx.send(msg).unwrap();
@@ -368,11 +368,12 @@ mod tests {
             h: 4,
             a: 5,
             d: 6,
-            dhit: 7,
-            numchar: 8,
-            idchar: 9,
-            totchar: 10,
-            totenemies: 11,
+            d2: 7,
+            dhit: 8,
+            numchar: 9,
+            idchar: 10,
+            totchar: 11,
+            totenemies: 12,
             exit: true,
             healt: 13,
             stamina: 14,
@@ -412,11 +413,12 @@ mod tests {
             h: 4,
             a: 5,
             d: 6,
-            dhit: 7,
-            numchar: 8,
-            idchar: 9,
-            totchar: 10,
-            totenemies: 11,
+            d2: 7,
+            dhit: 8,
+            numchar: 9,
+            idchar: 10,
+            totchar: 11,
+            totenemies: 12,
             exit: true,
             healt: 13,
             stamina: 14,
@@ -470,11 +472,12 @@ mod tests {
                     h: 4,
                     a: 5,
                     d: 6,
-                    dhit: 7,
-                    numchar: 8,
-                    idchar: 9,
-                    totchar: 10,
-                    totenemies: 11,
+                    d2: 7,
+                    dhit: 8,
+                    numchar: 9,
+                    idchar: 10,
+                    totchar: 11,
+                    totenemies: 12,
                     exit: true,
                     healt: 13,
                     stamina: 14,

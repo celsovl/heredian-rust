@@ -14,6 +14,17 @@
             "cwd": "${workspaceFolder}/heredian-client",
             "environment": [],
             "externalConsole": false
+        },
+        {
+            "name": "heredian-server",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/target/debug/heredian-server.exe",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/heredian-server",
+            "environment": [],
+            "externalConsole": false
         }
     ]
 }

@@ -205,10 +205,10 @@ impl GameScreen {
                     that_char.info.healt = msg.healt as i32;
 
                     match msg.dhit as i32 {
-                        GDPUP => that_char.obj.y -= 1.0,
-                        GDPDOWN => that_char.obj.y += 1.0,
-                        GDPLEFT => that_char.obj.x -= 1.0,
-                        GDPRIGHT => that_char.obj.x -= 1.0,
+                        DIRECTION_UP => that_char.obj.y -= 1.0,
+                        DIRECTION_DOWN => that_char.obj.y += 1.0,
+                        DIRECTION_LEFT => that_char.obj.x -= 1.0,
+                        DIRECTION_RIGHT => that_char.obj.x -= 1.0,
                         _ => ()
                     }
                 }
@@ -277,19 +277,24 @@ impl GameScreen {
         match self.client.as_ref() {
             Some(client) => {
                 while let Ok(char_info) = client.try_recv() {
+                    //println!("id: {:#?}", &char_info);
                     state.update_char(char_info);
                 }
 
-                state.update_local_char(client);
+                let mut should_send = state.update_local_char(client);
+                should_send |= self.try_ambient_change(state);
+
+                if should_send {
+                    let local_char = state.get_localchar_mut().expect("Cannot find local char.");
+                    local_char.send(client);
+                }
             },
             None => panic!("No channel available for propagation of local char's changes.")
         }
-
-        self.try_ambient_change(state);
     }
 
-    pub fn try_ambient_change(&self, state: &mut GameState) {
-        state.try_change_ambient();
+    pub fn try_ambient_change(&self, state: &mut GameState) -> bool {
+        state.try_change_ambient()
     }
 
     pub fn show(&mut self, state: &mut GameState) {

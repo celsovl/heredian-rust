@@ -38,6 +38,8 @@ impl Ambients {
         let qt_maps = ambient_config_file.get("qt_maps").expect("qt_maps not found.");
         let mut models = Vec::with_capacity(qt_maps);
         
+        models.push(std::ptr::null());
+
         for i in 1..=qt_maps {
             let key = format!("map{}", i);
             let model_path = ambient_config_file.get_string(&key).expect(&(key + " not found."));
@@ -118,14 +120,12 @@ fn hit(packet: &mut PacketCharInfo, tx: i16, ty: i16, td: i16, damage: i16, ambi
         packet.exit = packet.healt == 0;
 
         let mov = match td as i32 {
-                    GDPUP => (0, -DISPLACEMENT),
-                    GDPDOWN => (0, DISPLACEMENT),
-                    GDPLEFT => (-DISPLACEMENT, 0),
-                    GDPRIGHT => (DISPLACEMENT, 0),
+                    DIRECTION_UP => (0, -DISPLACEMENT),
+                    DIRECTION_DOWN => (0, DISPLACEMENT),
+                    DIRECTION_LEFT => (-DISPLACEMENT, 0),
+                    DIRECTION_RIGHT => (DISPLACEMENT, 0),
                     _ => unreachable!()
                 };
-
-        println!("id {} d {} mov {:?}", packet.idchar, td, mov);
 
         if mov.0 != 0 {
             packet.x += mov.0;
@@ -188,21 +188,23 @@ fn on_message(ambients: &mut Ambients, packet: PacketCharInfo, _addr: SocketAddr
 
     this_char.totchar = len_clients as i16;
     this_char.totenemies = ambients.enemies.len() as i16;
-    this_char.idmap = packet.idmap;
+
 
     if this_char.healt == 0 {
         this_char.healt = packet.healt;
         this_char.numchar = packet.numchar;
     }
 
-    if this_char.x == -1 && this_char.y == -1 {
+    if this_char.x == -1 && this_char.y == -1 || this_char.idmap != packet.idmap {
         this_char.x = packet.x;
         this_char.y = packet.y;
     }
 
+    this_char.idmap = packet.idmap;
     this_char.w = packet.w;
     this_char.h = packet.h;
     this_char.d = packet.d;
+    this_char.d2 = packet.d2;
     this_char.a = packet.a;
     this_char.dhit = packet.dhit;
     this_char.damage = packet.damage;
@@ -213,7 +215,7 @@ fn on_message(ambients: &mut Ambients, packet: PacketCharInfo, _addr: SocketAddr
 
     let mut lifeless_char = PacketCharInfo::default();
 
-    for lifeless in this_char.listlifeless.iter() {
+    for lifeless in packet.listlifeless.iter() {
         if let Some(lifeless) = lifeless {
             lifeless_char.x = lifeless.x;
             lifeless_char.y = lifeless.y;
@@ -221,9 +223,10 @@ fn on_message(ambients: &mut Ambients, packet: PacketCharInfo, _addr: SocketAddr
             lifeless_char.h = lifeless.h;
             lifeless_char.d = lifeless.d;
             lifeless_char.damage = lifeless.damage;
+            lifeless_char.idmap = packet.idmap;
 
             //damage_char(&lifeless_char, others_chars, ambient_data, server);
-            damage_char(&lifeless_char, ambients.enemies.as_mut_slice(), ambient_data, server);        
+            damage_char(&lifeless_char, ambients.enemies.as_mut_slice(), ambient_data, server);
         }
     }
 
@@ -248,24 +251,30 @@ fn dir_damage(this_char: &PacketCharInfo, other_char: &mut PacketCharInfo, ambie
     let (xm, ym) = ((x1+x2)/2, (y1+y2)/2);
 
     match this_char.d as i32 {
-        GDPUP => hit(other_char, xm, y1, this_char.d, this_char.damage, ambient_data),
-        GDPDOWN => hit(other_char, xm, y2, this_char.d, this_char.damage, ambient_data),
-        GDPLEFT => hit(other_char, x1, ym, this_char.d, this_char.damage, ambient_data),
-        GDPRIGHT => hit(other_char, x2, ym, this_char.d, this_char.damage, ambient_data),
+        DIRECTION_UP => hit(other_char, xm, y1, this_char.d, this_char.damage, ambient_data),
+        DIRECTION_DOWN => hit(other_char, xm, y2, this_char.d, this_char.damage, ambient_data),
+        DIRECTION_LEFT => hit(other_char, x1, ym, this_char.d, this_char.damage, ambient_data),
+        DIRECTION_RIGHT => hit(other_char, x2, ym, this_char.d, this_char.damage, ambient_data),
         _ => unreachable!()
     }
 }
 
-fn damage_char(this_char: &PacketCharInfo, others_chars: &mut [PacketCharInfo], ambient_data: (i16, i16, *const AlBitmap), server: &Server<PacketCharInfo>) {
+fn damage_char(this_char: &PacketCharInfo, others_chars: &mut [PacketCharInfo], ambient_data: (i16, i16, *const AlBitmap), server: &Server<PacketCharInfo>) -> bool {
+    let mut hit = false;
+
     if this_char.damage > 0 {
         for other in others_chars {
             if this_char.idmap == other.idmap {
                 if dir_damage_chance(this_char, other, 1.0, ambient_data) {
+                    hit = true;
                     server.send(Message::Broadcast(other.clone()));
+                    break;
                 }
             }
         }
     }
+
+    hit
 }
 
 fn recv_once(ambients: &mut Ambients, server: &Server<PacketCharInfo>) {
@@ -304,18 +313,18 @@ fn move_enemy(enemy: &mut PacketCharInfo, client: &PacketCharInfo, ambient_data:
     let (mov_x, mov_y) = ((enemy.step as f32 * theta.1), (enemy.step as f32 * theta.0));
 
     let final_d = if mov_x.abs() > mov_y.abs() {
-        if mov_x >= 0.0 { GDPRIGHT } else { GDPLEFT }
+        if mov_x >= 0.0 { DIRECTION_RIGHT } else { DIRECTION_LEFT }
     } else {
-        if mov_y >= 0.0 { GDPDOWN } else { GDPUP }
+        if mov_y >= 0.0 { DIRECTION_DOWN } else { DIRECTION_UP }
     } as i16;
 
     let (mov_x, mov_y) = (mov_x.round() as i16, mov_y.round() as i16);
 
     enemy.x += mov_x;
     enemy.d = if mov_x >= 0 {
-                GDPRIGHT
+                DIRECTION_RIGHT
             } else {
-                GDPLEFT
+                DIRECTION_LEFT
             } as i16;
 
     if collided(enemy, ambient_data) {
@@ -324,9 +333,9 @@ fn move_enemy(enemy: &mut PacketCharInfo, client: &PacketCharInfo, ambient_data:
 
     enemy.y += mov_y;
     enemy.d = if mov_y >= 0 {
-                GDPDOWN
+                DIRECTION_DOWN
             } else {
-                GDPUP
+                DIRECTION_UP
             } as i16;
 
     if collided(enemy, ambient_data) {
@@ -354,15 +363,15 @@ fn move_boss(boss: &mut PacketCharInfo, client: &PacketCharInfo, lock: &mut i32)
 
             if dx >= dy {
                 if boss.x < client.x {
-                    boss.d = GDPRIGHT as i16;
+                    boss.d = DIRECTION_RIGHT as i16;
                 } else {
-                    boss.d = GDPLEFT as i16;
+                    boss.d = DIRECTION_LEFT as i16;
                 }
             } else {
                 if boss.y < client.y {
-                    boss.d = GDPDOWN as i16;
+                    boss.d = DIRECTION_DOWN as i16;
                 } else {
-                    boss.d = GDPUP as i16;
+                    boss.d = DIRECTION_UP as i16;
                 }
             }
         }
@@ -377,18 +386,18 @@ fn move_boss(boss: &mut PacketCharInfo, client: &PacketCharInfo, lock: &mut i32)
             if dx >= dy {
                 if boss.x < client.x {
                     boss.x += boss.step;
-                    boss.d = GDPRIGHT as i16;
+                    boss.d = DIRECTION_RIGHT as i16;
                 } else {
                     boss.x -= boss.step;
-                    boss.d = GDPLEFT as i16;
+                    boss.d = DIRECTION_LEFT as i16;
                 }
             } else {
                 if boss.y < client.y {
                     boss.y += boss.step;
-                    boss.d = GDPDOWN as i16;
+                    boss.d = DIRECTION_DOWN as i16;
                 } else {
                     boss.y -= boss.step;
-                    boss.d = GDPUP as i16;
+                    boss.d = DIRECTION_UP as i16;
                 }
             }
         }
@@ -416,9 +425,12 @@ fn game_loop(ambients: &mut Ambients, server: &Server<PacketCharInfo>) {
         let len_chars = ambients.clients.len() as i16;
         let len_enemies = ambients.enemies.len() as i16;
 
+        // clean dead enemies
+        ambients.enemies.retain(|e| !e.exit);
+
         for enemy in ambients.enemies.iter_mut() {
             let mut should_send = true;
-            let ambient_data = (width, height, ambients.models[(enemy.idmap-1) as usize]);
+            let ambient_data = (width, height, ambients.models[enemy.idmap as usize]);
 
             if enemy.healt <= 0 {
                 // update dead enemies' info
@@ -453,6 +465,7 @@ fn game_loop(ambients: &mut Ambients, server: &Server<PacketCharInfo>) {
                             move_enemy(enemy, client, ambient_data);
                         }
                     } else {
+                        should_send = false;
                         enemy.a = 0;
                     }
                 } else {
@@ -478,12 +491,33 @@ fn game_loop(ambients: &mut Ambients, server: &Server<PacketCharInfo>) {
 fn move_chars(ambients: &mut Ambients, server: &Server<PacketCharInfo>) {
     for this_char in ambients.clients.iter_mut() {
         if this_char.a == 1 || this_char.a == 2 {
-            match this_char.d as i32 {
-                GDPLEFT => this_char.x -= this_char.step,
-                GDPRIGHT => this_char.x += this_char.step,
-                GDPUP => this_char.y -= this_char.step,
-                GDPDOWN => this_char.y += this_char.step,
-                _ => unreachable!()
+            let mov =
+                match this_char.d2 as i32 {
+                    DIRECTION_LEFT => (-this_char.step, 0),
+                    DIRECTION_RIGHT => (this_char.step, 0),
+                    DIRECTION_UP => (0, -this_char.step),
+                    DIRECTION_DOWN => (0, this_char.step),
+                    DIRECTION_LEFTUP => (-this_char.step, -this_char.step),
+                    DIRECTION_RIGHTUP => (this_char.step, -this_char.step),
+                    DIRECTION_LEFTDOWN => (-this_char.step, this_char.step),
+                    DIRECTION_RIGHTDOWN => (this_char.step, this_char.step),
+                    _ => (0, 0)
+                };
+
+            let ambient_data = (ambients.width, ambients.height, ambients.models[this_char.idmap as usize]);
+
+            if mov.0 != 0 {
+                this_char.x += mov.0;
+                if collided(this_char, ambient_data) {
+                    this_char.x -= mov.0;
+                }
+            }
+
+            if mov.1 != 0 {
+                this_char.y += mov.1;
+                if collided(this_char, ambient_data) {
+                    this_char.y -= mov.1;
+                }
             }
 
             server.send(Message::Broadcast(this_char.clone()));
@@ -516,15 +550,19 @@ fn collided(enemy: &PacketCharInfo, ambient_data: (i16, i16, *const AlBitmap)) -
     let xdown = enemy.x as f32 * sx;
     let ydown = (enemy.y + enemy.h) as f32 * sy;
 
-    if xdown >= 0.0 && ydown >= 0.0 && xup <= we && yup <= he {
-        let color = al_get_pixel(model, xdown as i32, ydown as i32);
-        if colorwall == color {
-            return true;
+    if xdown >= 0.0 && yup >= 0.0 && xup <= we && ydown <= he {
+        if (enemy.d2 | enemy.d) & (DIRECTION_LEFTDOWN | DIRECTION_UP) as i16 != 0 {
+            let color = al_get_pixel(model, xdown as i32, ydown as i32);
+            if colorwall == color {
+                return true;
+            }
         }
 
-        let color = al_get_pixel(model, xup as i32, ydown as i32);
-        if colorwall == color {
-            return true;
+        if (enemy.d2 | enemy.d) & (DIRECTION_RIGHTDOWN | DIRECTION_UP) as i16 != 0 {
+            let color = al_get_pixel(model, xup as i32, ydown as i32);
+            if colorwall == color {
+                return true;
+            }
         }
     } else {
         return true;
