@@ -9,11 +9,20 @@ use crate::heredian::select_char_screen::*;
 use crate::heredian::loading_screen::*;
 use crate::heredian::game_screen::*;
 
+#[cfg(test_character)]
+use crate::heredian::test_character::*;
+
 pub mod heredian;
 
 fn main() {
     let mut state = gdp_init();
     state.init();
+
+    if cfg!(test_character) {
+        let mut game = TestCharacterScreen::new();
+        game.show(&mut state);
+        return;
+    }
 
     SplashScreen::show(&state);
     IntroScreen::show(&state);

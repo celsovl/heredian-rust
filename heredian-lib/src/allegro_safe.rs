@@ -24,7 +24,8 @@ pub use ffi::keyboard::{
     AlKeyboardState,
     ALLEGRO_KEY_UP, ALLEGRO_KEY_DOWN, ALLEGRO_KEY_LEFT, 
     ALLEGRO_KEY_RIGHT, ALLEGRO_KEY_ENTER, ALLEGRO_KEY_D,
-    ALLEGRO_KEY_F, ALLEGRO_KEY_1, ALLEGRO_KEY_2
+    ALLEGRO_KEY_F, 
+    ALLEGRO_KEY_1, ALLEGRO_KEY_2, ALLEGRO_KEY_3, ALLEGRO_KEY_4
 };
 pub use ffi::transformations::{
     AlTransform
@@ -363,6 +364,10 @@ pub fn al_draw_circle(cx: f32, cy: f32, r: f32, color: AlColor, thickness: f32) 
 
 pub fn al_draw_rectangle(x1: f32, y1: f32, x2: f32, y2: f32, color: AlColor, thickness: f32) {
     unsafe { ffi::primitives::al_draw_rectangle(x1, y1, x2, y2, color, thickness) }
+}
+
+pub fn al_draw_filled_rounded_rectangle(x1: f32, y1: f32, x2: f32, y2: f32, rx: f32, ry: f32, color: AlColor) {
+    unsafe { ffi::primitives::al_draw_filled_rounded_rectangle(x1, y1, x2, y2, rx, ry, color) }
 }
 
 pub fn al_unlock_bitmap(bitmap: *const AlBitmap) {

@@ -7,3 +7,6 @@ pub mod menu_screen;
 pub mod select_char_screen;
 pub mod loading_screen;
 pub mod game_screen;
+
+#[cfg(test_character)]
+pub mod test_character;

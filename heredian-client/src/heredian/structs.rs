@@ -978,6 +978,19 @@ impl Char {
         client.send(char_info);
     }
 
+    pub fn draw_lifebar(&self) {
+        let cx = self.obj.x + self.obj.wd/2.0;
+        let (x1, y1, y2) = (cx - 15.0, self.obj.y - 7.0, self.obj.y - 4.0);
+        let wd = 30.0 * self.info.healt as f32/self.info.healtfull as f32;
+
+        if wd > std::f32::EPSILON {
+            let border_color = al_map_rgb(80, 80, 80);
+            let color = al_map_rgb(0, 255, 0);
+            al_draw_filled_rounded_rectangle(x1-1.0, y1-1.0, x1 + 31.0, y2+1.0, 1.0, 1.0, border_color);
+            al_draw_filled_rounded_rectangle(x1, y1, x1 + wd, y2, 1.0, 1.0, color);
+        }
+    }
+
     pub fn draw(&mut self) {
         let a = self.obj.a as usize;
 
@@ -1049,6 +1062,11 @@ impl Char {
         }
 
         al_destroy_bitmap(frame);
+
+        // draw life bar if enemy
+        if self.obj.r#type > 4 {
+            self.draw_lifebar();
+        }
 
         // draw lifeless if needed
         for lifeless in self.list_lifeless.iter_mut() {

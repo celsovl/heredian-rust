@@ -59,7 +59,7 @@ impl GameScreen {
         self.client = Some(client);
     }
 
-    fn close(&mut self, state: &mut GameState) {
+    fn close(&mut self, _state: &mut GameState) {
         /*
         al_destroy_font(self.fonte);
         al_destroy_bitmap(self.image);
@@ -179,58 +179,6 @@ impl GameScreen {
 
         al_build_transform(&mut camera, scaled_x, scaled_y, scale, scale, 0.0);
         al_use_transform(&camera);
-    }
-
-    fn recv_once(&mut self, state: &mut GameState) {
-        if let Some(client) = self.client.as_ref() {
-            while let Ok(msg) = client.try_recv() {
-                let that_char = state.list_chars.iter_mut().find(|c| c.obj.idchar as i16 == msg.idchar);
-
-                let that_char =
-                    if let Some(that_char) = that_char {
-                        // replace if char is dead and not an enemy
-                        if that_char.dead && msg.numchar <= 4 {
-                            *that_char = Char::load(msg.numchar as i32);
-                        }
-
-                        that_char
-                    } else {
-                        // load new char
-                        let that_char = Char::load(msg.numchar as i32);
-                        state.list_chars.push(that_char);
-                        state.list_chars.last_mut().unwrap()
-                    };
-
-                if that_char.info.healt != msg.healt as i32 {
-                    that_char.info.healt = msg.healt as i32;
-
-                    match msg.dhit as i32 {
-                        DIRECTION_UP => that_char.obj.y -= 1.0,
-                        DIRECTION_DOWN => that_char.obj.y += 1.0,
-                        DIRECTION_LEFT => that_char.obj.x -= 1.0,
-                        DIRECTION_RIGHT => that_char.obj.x -= 1.0,
-                        _ => ()
-                    }
-                }
-
-                if !msg.exit {
-                    if msg.idchar as usize != state.local_char_id && that_char.obj.a != 4 {
-                        that_char.dead = false;
-                        that_char.obj.id = msg.idchar as i32;
-                        that_char.obj.idchar = msg.idchar as i32;
-                        that_char.obj.a = msg.a as i32;
-                        that_char.obj.d = msg.d as i32;
-                        that_char.obj.x = msg.x as f32;
-                        that_char.obj.y = msg.y as f32;
-                        that_char.info.stamina = msg.stamina as i32;
-                        that_char.idmap = msg.idmap as i32;
-                    }
-                } else {
-                    that_char.dead = true;
-                    that_char.obj.a = msg.a as i32;
-                }
-            }
-        }
     }
 
     fn run_loop(&mut self, state: &mut GameState) {
