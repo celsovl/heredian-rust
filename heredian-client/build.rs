@@ -1,3 +1,3 @@
 fn main() {
-    println!("cargo:rustc-cfg=test_character");
+    //println!("cargo:rustc-cfg=test_character");
 }

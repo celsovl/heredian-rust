@@ -14,13 +14,19 @@ use crate::heredian::test_character::*;
 
 pub mod heredian;
 
+#[cfg(test_character)]
+fn run_test(state: &mut GameState) {
+    let mut game = TestCharacterScreen::new();
+    game.show(&mut state);
+}
+
 fn main() {
     let mut state = gdp_init();
     state.init();
 
     if cfg!(test_character) {
-        let mut game = TestCharacterScreen::new();
-        game.show(&mut state);
+        #[cfg(test_character)]
+        run_test(&mut state);
         return;
     }
 
