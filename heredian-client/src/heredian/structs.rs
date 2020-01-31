@@ -414,13 +414,15 @@ impl Info {
 }
 
 impl Sprite {
-    pub fn from_config(config_file: &ConfigFile) -> [Vec<Sprite>; 4] {
+    pub fn from_config(config_file: &ConfigFile, (_width, height): (i32, i32)) -> [Vec<Sprite>; 4] {
         let qt_sprites = config_file.get("qt_sprites").expect("qt_sprites não encontrado");
 
         let ntamx = config_file.get("size_x").expect("size_x não encontrado");
         let ntamy = config_file.get("size_y").expect("size_y não encontrado");
 
         let mut all_sprites = [Vec::new(), Vec::new(), Vec::new(), Vec::new()];
+
+        let single_row_multiplier = if height == ntamy { 0 } else { 1 };
 
         for i in 0..4 {
             let sprites = &mut all_sprites[i];
@@ -440,7 +442,7 @@ impl Sprite {
             for j in 0..qt_sprites {
                 let mut sprite = Sprite {
                     ix: j,
-                    iy: i as i32,
+                    iy: single_row_multiplier * i as i32,
                     w: ntamx,
                     h: ntamy,
     
@@ -534,7 +536,8 @@ impl Action {
         let fps = action_config_file.get("fps").expect("fps não encontrado.");
         let nfsp = 1.0 / fps;
 
-        let mut directions = Sprite::from_config(&action_config_file);
+        let wh = (al_get_bitmap_width(pri), al_get_bitmap_height(pri));
+        let mut directions = Sprite::from_config(&action_config_file, wh);
         Self::adjust_rects(pri, &mut directions);
 
         Action {
@@ -543,7 +546,7 @@ impl Action {
             stepx: action_config_file.get("stepx").expect("stepx não encontrado."),
             stepy: action_config_file.get("stepy").expect("stepy não encontrado."),
             fps: fps,
-            repeat: action_config_file.get("repeat").unwrap_or(false),
+            repeat: action_config_file.get("repeat").unwrap_or(true),
             lifelessid: action_config_file.get::<i32>("lifelessid").and_then(|v| if v > 0 { Some(v) } else { None } ),
             rebatex: action_config_file.get("rebatex").unwrap_or(0),
             rebatey: action_config_file.get("rebatey").unwrap_or(0),
@@ -1302,5 +1305,9 @@ mod test {
 
         let ambient = Scene::load(1, 640, 480);
         println!("{:#?}", ambient);
+    }
+
+    #[test]
+    fn test_animation() {
     }
 }

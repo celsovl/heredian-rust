@@ -17,7 +17,7 @@ pub mod heredian;
 #[cfg(test_character)]
 fn run_test(state: &mut GameState) {
     let mut game = TestCharacterScreen::new();
-    game.show(&mut state);
+    game.show(state);
 }
 
 fn main() {

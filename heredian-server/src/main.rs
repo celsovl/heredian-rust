@@ -445,7 +445,7 @@ fn game_loop(ambients: &mut Ambients, server: &Server<PacketCharInfo>) {
                                             let dist = distance(c, enemy);
                                             (c, dist)
                                         })
-                                        .max_by(|c1, c2| c1.1.partial_cmp(&c2.1).unwrap());
+                                        .min_by(|c1, c2| c1.1.partial_cmp(&c2.1).unwrap());
 
                 if let Some((client, dist)) = nearest_client {
                     if dist <= enemy.vision as f32 {

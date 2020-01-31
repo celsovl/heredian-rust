@@ -29,6 +29,7 @@ impl TestCharacterScreen {
                     }
 
                     if self.check_char() {
+                        self.handle_play_dead();
                         self.update();
                         self.draw();
                     }
@@ -36,6 +37,20 @@ impl TestCharacterScreen {
                 AlEventType::ALLEGRO_EVENT_DISPLAY_CLOSE => break,
                 _ => ()
             }
+        }
+    }
+
+    fn handle_play_dead(&mut self) {
+        if self.current_char.is_none() {
+            return;
+        }
+
+        let mut cur = self.current_char.as_mut().unwrap();
+        let mut kstate = AlKeyboardState::default();
+        al_get_keyboard_state(&mut kstate);
+
+        if al_key_down(&kstate, ALLEGRO_KEY_R) {
+            cur.info.healt = 0;
         }
     }
 
